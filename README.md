@@ -1,63 +1,57 @@
 # Cell Tracking Studio
 
-Cell Tracking Studio is a local application for cell segmentation, trajectory tracking, and group comparison. Researchers do not need to configure Python, Conda, or Git manually. The first launch creates an isolated environment, installs dependencies, and downloads the segmentation model automatically.
+## Setup
 
-## One-click startup
+1. Download the latest application ZIP from GitHub Releases.
+2. Extract the ZIP to a permanent folder.
+3. Keep an internet connection available during the first launch. The required
+   environment and segmentation model are downloaded automatically.
 
-An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies such as Ultralytics and PyTorch, plus the approximately 137 MiB segmentation model. After installation, later launches reuse the local environment and download cache.
-
-Every launch checks for a new application release. Git clones are updated only when the current branch is `main`, tracked files have no local changes, and the update can be applied as a fast-forward. Downloaded ZIP copies update from verified GitHub Release packages. If the update server is unavailable, the installed version starts normally.
+## Start the application
 
 ### macOS
 
 Double-click `start.command`.
 
-Because the downloaded ZIP is not signed and notarized with an Apple Developer
-certificate, macOS may show **"start.command Not Opened"** the first time:
+If macOS displays **"start.command Not Opened"**:
 
 1. Click **Done**. Do not click **Move to Trash**.
-2. In Finder, Control-click or right-click `start.command`.
-3. Select **Open**, then confirm **Open** again.
+2. Right-click `start.command`, select **Open**, and confirm **Open**.
+3. If necessary, go to **System Settings → Privacy & Security** and click
+   **Open Anyway**.
 
-If the **Open** option is unavailable, open **System Settings → Privacy &
-Security**, scroll down, and select **Open Anyway** for `start.command`.
-
-As a fallback, open Terminal and run the following command, replacing the path
-with the location of the extracted application folder. You can type the command
-and then drag the folder from Finder into the Terminal window to insert its
-path:
+If it is still blocked, open Terminal, type the following command, and add one
+space after it:
 
 ```sh
-xattr -dr com.apple.quarantine "/path/to/cell-tracking-studio"
+xattr -dr com.apple.quarantine
 ```
 
-Then double-click `start.command` again. This approval is normally required
-only once. The browser opens automatically after startup completes.
+Do not press Return yet. Drag the **entire extracted Cell Tracking Studio
+folder** from Finder into the Terminal window, then press Return. For example:
+
+```sh
+xattr -dr com.apple.quarantine "/path/to/extracted/CellTracking-Studio"
+```
+
+Double-click `start.command` again.
 
 ### Windows
 
-Double-click `start.bat`. Python, Conda, and Git do not need to be installed in advance.
+Double-click `start.bat`.
 
 ### Linux
 
-Double-click `start-linux.desktop`. If the desktop environment asks for permission, select **Allow Launching**. You can also run this command from the project directory:
+Double-click `start-linux.desktop` and select **Allow Launching** if prompted,
+or run:
 
 ```sh
 ./start.sh
 ```
 
-## Experimental resources
+## Add datasets
 
-The first launch downloads the laboratory segmentation model to:
-
-```text
-models/segmentation/yolo11x-seg.pt
-```
-
-The launcher verifies the model's exact file size and SHA-256 checksum. It does not substitute a general-purpose YOLO model, because doing so could produce incorrect scientific results.
-
-Place experimental images in the included `Datasets/` folder. Each folder
-directly containing images is treated as one dataset. For example:
+Put each image sequence in its own folder inside `Datasets/`:
 
 ```text
 Datasets/
@@ -74,32 +68,20 @@ Datasets/
         └── frame_002.tif
 ```
 
-In this example, `Sample_01`, `Sample_02`, and `Sample_03` are datasets;
-`Control` and `Treatment` are optional grouping folders. Images can also be
-placed directly inside a single folder under `Datasets/`.
+Folders such as `Control` and `Treatment` are optional groups. A folder that
+directly contains images is treated as one dataset.
 
-Application updates never replace or delete `Datasets/`, `models/`, or
-`workspace/`. Experimental images inside `Datasets/` are ignored by Git and
-are not included in application releases.
+Supported formats: `.bmp`, `.jpeg`, `.jpg`, `.png`, `.tif`, and `.tiff`.
 
-To use a different laboratory model, set `CELLTRACK_WEIGHTS_PATH` to its absolute path. A custom model is checked for existence but is never downloaded or overwritten by the updater.
+## Results and logs
 
-To skip the application update check for one launch, set:
+- Processing results: `workspace/results/`
+- Group analysis: `workspace/analysis/`
+- Troubleshooting logs: `workspace/logs/`
 
-```sh
-CELLTRACK_SKIP_UPDATE=1
-```
+Application updates do not replace or delete `Datasets/`, `models/`, or
+`workspace/`.
 
-## Startup failures
-
-The launcher automatically detects and repairs a damaged, incomplete, or transferred `.venv`. If installation is interrupted, double-click the launcher again.
-
-If startup still fails, send these logs to technical support:
-
-```text
-workspace/logs/bootstrap.log
-workspace/logs/launcher.log
-workspace/logs/server.log
-```
-
-You do not need to delete experimental data, models, or analysis results manually.
+If startup is interrupted during the first installation, start the application
+again. If it still fails, send the files in `workspace/logs/` to technical
+support.

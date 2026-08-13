@@ -2,8 +2,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+.tools/
 *.egg-info/
 Datasets/
 models/
 workspace/results/
 workspace/analysis/
+workspace/logs/

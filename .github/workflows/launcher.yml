@@ -1,0 +1,43 @@
+name: Cross-platform launcher
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.16"
+          enable-cache: true
+
+      - name: Install Python and dependencies
+        run: uv sync --locked --python 3.11 --managed-python --extra test
+
+      - name: Run tests
+        env:
+          MPLCONFIGDIR: ${{ runner.temp }}/matplotlib
+          YOLO_CONFIG_DIR: ${{ runner.temp }}/ultralytics
+        run: uv run --locked --extra test python -m unittest discover -s tests
+
+      - name: Run launcher self-check
+        env:
+          MPLCONFIGDIR: ${{ runner.temp }}/matplotlib
+          YOLO_CONFIG_DIR: ${{ runner.temp }}/ultralytics
+        run: uv run --locked python scripts/launcher.py --self-check
+
+      - name: Validate Unix launcher syntax
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          sh -n start.sh
+          if command -v zsh >/dev/null 2>&1; then zsh -n start.command; fi

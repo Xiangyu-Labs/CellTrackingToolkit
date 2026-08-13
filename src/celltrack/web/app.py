@@ -19,6 +19,15 @@ app.include_router(jobs.router)
 app.include_router(analysis.router)
 
 
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "app": "cell-tracking-studio",
+        "version": "2.0.0",
+    }
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")

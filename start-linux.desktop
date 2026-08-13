@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Cell Tracking Studio
+Comment=Install dependencies and start Cell Tracking Studio
+Terminal=true
+Exec=sh -c "cd \"$(dirname \"$1\")\" && exec ./start.sh" sh %k
+Icon=applications-science
+Categories=Science;Education;

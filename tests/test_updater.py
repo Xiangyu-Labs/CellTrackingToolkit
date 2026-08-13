@@ -161,7 +161,10 @@ class ZipUpdateTests(unittest.TestCase):
 
             self.assertEqual((root / "app.txt").read_text(), "new")
             self.assertEqual((root / "new.txt").read_text(), "added")
-            self.assertTrue((root / "start.sh").stat().st_mode & stat.S_IXUSR)
+            if os.name != "nt":
+                self.assertTrue(
+                    (root / "start.sh").stat().st_mode & stat.S_IXUSR
+                )
             self.assertEqual((root / "Datasets" / "image.tif").read_bytes(), b"image")
             self.assertEqual((root / "models" / "model.pt").read_bytes(), b"model")
             self.assertEqual(

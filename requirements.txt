@@ -1,0 +1,2 @@
+# Install Cell Tracking Studio and its dependencies from pyproject.toml.
+-e .

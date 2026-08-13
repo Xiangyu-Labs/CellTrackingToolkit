@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cell Tracking Studio</title>
+  <link rel="stylesheet" href="/static/css/tokens.css?v=3">
+  <link rel="stylesheet" href="/static/css/components.css?v=4">
+  <link rel="stylesheet" href="/static/css/layout.css?v=2">
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <strong class="brand-text">Cell Tracking Studio</strong>
+        <button class="icon-button" id="sidebarToggle" type="button" aria-label="折叠侧栏" title="折叠侧栏"><i data-lucide="panel-left-close"></i></button>
+      </div>
+      <nav class="stage-nav" aria-label="分析流程" data-i18n-aria="workflow">
+        <button class="stage-button" type="button" data-tab="segmentation"><span>1</span><strong data-i18n="segmentation">目标分割</strong></button>
+        <button class="stage-button" type="button" data-tab="tracking"><span>2</span><strong data-i18n="tracking">细胞追踪</strong></button>
+        <button class="stage-button" type="button" data-tab="compare"><span>3</span><strong data-i18n="compare">分组比较</strong></button>
+      </nav>
+      <label class="language-toggle">
+        <span>中</span>
+        <input id="languageToggle" type="checkbox" role="switch" aria-label="语言">
+        <span>EN</span>
+      </label>
+    </aside>
+
+    <main id="main" class="main-content" tabindex="-1">
+      <section id="workflowView">
+        <header class="page-header"><h1 id="stageTitle"></h1></header>
+        <div class="toolbar">
+          <label class="search-field"><i data-lucide="search"></i><span class="sr-only" data-i18n="search">搜索数据集</span><input id="datasetSearch" type="search" data-i18n-placeholder="search" placeholder="搜索数据集"></label>
+          <div id="statusFilters" class="segmented-control" aria-label="状态筛选"></div>
+        </div>
+        <div class="selection-toolbar">
+          <span><strong id="selectedCount">0</strong> <span data-i18n="selected">个已选择</span></span>
+          <button class="text-button" id="selectVisible" type="button" data-i18n="selectVisible">全选当前结果</button>
+          <button class="text-button" id="clearVisible" type="button" data-i18n="clearVisible">清空当前结果</button>
+        </div>
+        <div class="dataset-table">
+          <div class="dataset-header"><span></span><span data-i18n="dataset">数据集</span><span data-i18n="images">图片</span><span data-i18n="status">处理状态</span></div>
+          <div id="datasetList"></div>
+          <div id="datasetEmpty" class="empty-state" hidden data-i18n="empty">没有匹配的数据集</div>
+        </div>
+        <div id="jobBar" class="job-bar" hidden></div>
+        <div class="action-bar">
+          <p id="actionHint"></p>
+          <button class="button primary" id="runButton" type="button" disabled><i data-lucide="play"></i><span></span></button>
+        </div>
+      </section>
+
+      <section id="compareView" hidden>
+        <header class="page-header">
+          <h1 data-i18n="compare">分组比较</h1>
+          <button class="button secondary" id="addGroup" type="button"><i data-lucide="plus"></i><span data-i18n="addGroup">添加分组</span></button>
+        </header>
+        <div id="groupTabs" class="group-tabs" role="tablist"></div>
+        <div class="group-editor">
+          <label><span data-i18n="groupName">分组名称</span><input id="groupName" maxlength="40"></label>
+          <button class="icon-button danger" id="removeGroup" type="button" aria-label="删除分组" title="删除分组"><i data-lucide="trash-2"></i></button>
+        </div>
+        <div class="toolbar">
+          <label class="search-field"><i data-lucide="search"></i><span class="sr-only" data-i18n="groupSearch">搜索可追踪数据集</span><input id="groupSearch" type="search" data-i18n-placeholder="groupSearch" placeholder="搜索可追踪数据集"></label>
+          <button class="text-button" id="selectGroupVisible" type="button" data-i18n="selectVisible">全选当前结果</button>
+          <button class="text-button" id="clearGroupVisible" type="button" data-i18n="clearVisible">清空当前结果</button>
+        </div>
+        <div id="groupDatasetList" class="group-dataset-list"></div>
+
+        <details class="parameter-panel" open>
+          <summary data-i18n="parameters">比较参数</summary>
+          <div id="numericParameters" class="parameter-grid"></div>
+          <label class="switch-row"><input id="fallbackTracks" type="checkbox"><span data-i18n="fallbackTracks">没有长轨迹时使用全部轨迹</span></label>
+          <fieldset><legend data-i18n="figures">比较图</legend><div id="figureOptions" class="option-grid"></div></fieldset>
+          <fieldset><legend data-i18n="temporalMetrics">时序指标</legend><div id="temporalOptions" class="option-grid"></div></fieldset>
+          <fieldset><legend data-i18n="summaryMetrics">汇总指标</legend><div id="summaryOptions" class="option-grid"></div></fieldset>
+        </details>
+
+        <div class="action-bar compare-action"><p id="compareHint" role="status" aria-live="polite"></p><button class="button primary" id="analyzeButton" type="button" aria-busy="false" disabled><i data-lucide="chart-no-axes-combined"></i><span data-i18n="generate">生成比较</span></button></div>
+        <section class="history" aria-labelledby="historyTitle"><h2 id="historyTitle" data-i18n="history">历史分析</h2><div id="historyList"></div></section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="resultDialog" class="result-dialog">
+    <header><div><small id="resultKind"></small><h2 id="resultTitle"></h2></div><button class="icon-button" id="closeViewer" aria-label="关闭" title="关闭"><i data-lucide="x"></i></button></header>
+    <div class="viewer-stage"><div id="viewerLoading" class="viewer-loading" role="status"><i data-lucide="loader-circle" aria-hidden="true"></i><span data-i18n="loading">正在生成预览</span></div><img id="resultImage" alt=""></div>
+    <footer><button class="icon-button" id="previousFrame" aria-label="上一帧" title="上一帧"><i data-lucide="chevron-left"></i></button><input id="frameSlider" type="range" min="1" value="1"><span id="frameCounter"></span><button class="icon-button" id="nextFrame" aria-label="下一帧" title="下一帧"><i data-lucide="chevron-right"></i></button></footer>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script type="module" src="/static/js/app.js?v=8"></script>
+</body>
+</html>

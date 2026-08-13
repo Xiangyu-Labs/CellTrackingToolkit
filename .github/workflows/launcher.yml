@@ -6,6 +6,13 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     strategy:
@@ -43,3 +50,72 @@ jobs:
         run: |
           sh -n start.sh
           if command -v zsh >/dev/null 2>&1; then zsh -n start.command; fi
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.16"
+
+      - name: Confirm this is the latest tested commit
+        id: latest
+        shell: bash
+        run: |
+          git fetch origin main
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "A newer main commit exists; its workflow will publish instead."
+          fi
+
+      - name: Increment patch version
+        if: steps.latest.outputs.publish == 'true'
+        id: version
+        shell: bash
+        run: |
+          version="$(python scripts/bump_version.py)"
+          uv lock
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag release
+        if: steps.latest.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION pyproject.toml uv.lock src/celltrack/__init__.py
+          git commit -m "chore: release ${TAG} [skip ci]"
+          git tag -a "$TAG" -m "Cell Tracking Studio $TAG"
+          git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+      - name: Build release assets
+        if: steps.latest.outputs.publish == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          python scripts/build_release.py \
+            --tag "$TAG" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir dist
+
+      - name: Publish GitHub Release
+        if: steps.latest.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release create "$TAG" dist/* --generate-notes

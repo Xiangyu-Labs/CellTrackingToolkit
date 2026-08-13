@@ -31,7 +31,7 @@ class HealthEndpointTests(unittest.TestCase):
             {
                 "status": "ok",
                 "app": "cell-tracking-studio",
-                "version": "2.0.2",
+                "version": launcher.__version__,
             },
         )
 

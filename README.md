@@ -12,7 +12,27 @@ Every launch checks for a new application release. Git clones are updated only w
 
 Double-click `start.command`.
 
-If macOS blocks it the first time, right-click `start.command`, select **Open**, and confirm once more. The browser opens automatically after startup completes.
+Because the downloaded ZIP is not signed and notarized with an Apple Developer
+certificate, macOS may show **"start.command Not Opened"** the first time:
+
+1. Click **Done**. Do not click **Move to Trash**.
+2. In Finder, Control-click or right-click `start.command`.
+3. Select **Open**, then confirm **Open** again.
+
+If the **Open** option is unavailable, open **System Settings → Privacy &
+Security**, scroll down, and select **Open Anyway** for `start.command`.
+
+As a fallback, open Terminal and run the following command, replacing the path
+with the location of the extracted application folder. You can type the command
+and then drag the folder from Finder into the Terminal window to insert its
+path:
+
+```sh
+xattr -dr com.apple.quarantine "/path/to/cell-tracking-studio"
+```
+
+Then double-click `start.command` again. This approval is normally required
+only once. The browser opens automatically after startup completes.
 
 ### Windows
 
@@ -36,7 +56,31 @@ models/segmentation/yolo11x-seg.pt
 
 The launcher verifies the model's exact file size and SHA-256 checksum. It does not substitute a general-purpose YOLO model, because doing so could produce incorrect scientific results.
 
-Place experimental images in `Datasets/`. Application updates never replace or delete `Datasets/`, `models/`, or `workspace/`.
+Place experimental images in the included `Datasets/` folder. Each folder
+directly containing images is treated as one dataset. For example:
+
+```text
+Datasets/
+├── Control/
+│   ├── Sample_01/
+│   │   ├── frame_001.tif
+│   │   └── frame_002.tif
+│   └── Sample_02/
+│       ├── frame_001.tif
+│       └── frame_002.tif
+└── Treatment/
+    └── Sample_03/
+        ├── frame_001.tif
+        └── frame_002.tif
+```
+
+In this example, `Sample_01`, `Sample_02`, and `Sample_03` are datasets;
+`Control` and `Treatment` are optional grouping folders. Images can also be
+placed directly inside a single folder under `Datasets/`.
+
+Application updates never replace or delete `Datasets/`, `models/`, or
+`workspace/`. Experimental images inside `Datasets/` are ignored by Git and
+are not included in application releases.
 
 To use a different laboratory model, set `CELLTRACK_WEIGHTS_PATH` to its absolute path. A custom model is checked for existence but is never downloaded or overwritten by the updater.
 

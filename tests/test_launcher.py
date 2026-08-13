@@ -31,7 +31,7 @@ class HealthEndpointTests(unittest.TestCase):
             {
                 "status": "ok",
                 "app": "cell-tracking-studio",
-                "version": "2.0.1",
+                "version": "2.0.2",
             },
         )
 
@@ -100,6 +100,22 @@ class LauncherPortTests(unittest.TestCase):
 
 
 class LauncherValidationTests(unittest.TestCase):
+    def test_run_creates_datasets_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            datasets = Path(temporary) / "Datasets"
+            with (
+                mock.patch.object(launcher, "DATASETS_DIR", datasets),
+                mock.patch.object(launcher, "validate_model"),
+                mock.patch.object(
+                    launcher,
+                    "select_port",
+                    side_effect=RuntimeError("stop after setup"),
+                ),
+                self.assertRaisesRegex(RuntimeError, "stop after setup"),
+            ):
+                launcher.run_application(no_browser=True)
+            self.assertTrue(datasets.is_dir())
+
     def test_missing_model_message_is_actionable(self):
         with mock.patch.object(
             launcher,

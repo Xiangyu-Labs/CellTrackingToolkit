@@ -21,6 +21,7 @@ EXCLUDED_TOP_LEVEL = {
     "models",
     "workspace",
 }
+INCLUDED_EXCLUDED_PATHS = {Path("Datasets/README.md")}
 
 
 def sha256_file(path: Path) -> str:
@@ -43,7 +44,10 @@ def tracked_files() -> list[Path]:
         if not raw_path:
             continue
         relative = Path(raw_path.decode("utf-8"))
-        if relative.parts[0] not in EXCLUDED_TOP_LEVEL:
+        if (
+            relative.parts[0] not in EXCLUDED_TOP_LEVEL
+            or relative in INCLUDED_EXCLUDED_PATHS
+        ):
             files.append(relative)
     return files
 

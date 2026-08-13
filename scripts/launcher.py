@@ -21,6 +21,7 @@ import webbrowser
 from celltrack import __version__
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATASETS_DIR = PROJECT_ROOT / "Datasets"
 LOG_DIR = PROJECT_ROOT / "workspace" / "logs"
 LOG_PATH = LOG_DIR / "launcher.log"
 DEFAULT_MODEL_PATH = (
@@ -152,6 +153,7 @@ def self_check() -> int:
 
 
 def run_application(*, no_browser: bool = False) -> int:
+    DATASETS_DIR.mkdir(parents=True, exist_ok=True)
     validate_model()
     port, already_running = select_port()
     url = f"http://{HOST}:{port}"

@@ -4,7 +4,8 @@ __pycache__/
 .venv/
 .tools/
 *.egg-info/
-Datasets/
+Datasets/*
+!Datasets/README.md
 models/
 workspace/results/
 workspace/analysis/

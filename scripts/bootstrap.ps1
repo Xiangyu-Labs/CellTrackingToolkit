@@ -42,7 +42,7 @@ function Invoke-Logged {
 }
 
 try {
-    Write-Stage "[1/4] Checking startup tools"
+    Write-Stage "[1/6] Checking startup tools"
     if (-not (Test-Path $UvExe -PathType Leaf)) {
         Write-Stage "An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies."
         $Installer = Join-Path $ToolsDir "install.ps1"
@@ -69,7 +69,7 @@ try {
         }
     }
 
-    Write-Stage "[2/4] Preparing Python 3.11"
+    Write-Stage "[2/6] Preparing Python 3.11"
     try {
         Invoke-Logged $UvExe python install 3.11
     }
@@ -100,7 +100,27 @@ try {
         }
     }
 
-    Write-Stage "[3/4] Installing or checking application dependencies"
+    if ($env:CELLTRACK_UPDATE_RESTARTED -ne "1") {
+        Write-Stage "[3/6] Checking for application updates"
+        & $UvExe run --python 3.11 --no-project `
+            (Join-Path $ProjectRoot "scripts\updater.py") --app-only *>> $BootstrapLog
+        $UpdateStatus = $LASTEXITCODE
+        if ($UpdateStatus -eq 10) {
+            Write-Stage "Restarting with the updated application..."
+            $env:CELLTRACK_UPDATE_RESTARTED = "1"
+            & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass `
+                -File (Join-Path $ProjectRoot "scripts\bootstrap.ps1") @LauncherArguments
+            exit $LASTEXITCODE
+        }
+        elseif ($UpdateStatus -ne 0) {
+            Write-Stage "Automatic update check failed; continuing with this version."
+        }
+    }
+    else {
+        Write-Stage "[3/6] Application update applied"
+    }
+
+    Write-Stage "[4/6] Installing or checking application dependencies"
     try {
         Invoke-Logged $UvExe sync --locked --python 3.11 --managed-python
     }
@@ -120,7 +140,15 @@ try {
         }
     }
 
-    Write-Stage "[4/4] Starting Cell Tracking Studio"
+    Write-Stage "[5/6] Checking the segmentation model"
+    try {
+        Invoke-Logged $VenvPython (Join-Path $ProjectRoot "scripts\updater.py") --model-only
+    }
+    catch {
+        Stop-Launch "The segmentation model could not be downloaded. Check the internet connection and start the application again."
+    }
+
+    Write-Stage "[6/6] Starting Cell Tracking Studio"
     & $VenvPython (Join-Path $ProjectRoot "scripts\launcher.py") @LauncherArguments
     exit $LASTEXITCODE
 }

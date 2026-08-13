@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import socket
 import subprocess
@@ -30,7 +31,7 @@ class HealthEndpointTests(unittest.TestCase):
             {
                 "status": "ok",
                 "app": "cell-tracking-studio",
-                "version": "2.0.0",
+                "version": "2.0.1",
             },
         )
 
@@ -102,13 +103,23 @@ class LauncherValidationTests(unittest.TestCase):
     def test_missing_model_message_is_actionable(self):
         with mock.patch.object(
             launcher,
-            "MODEL_PATH",
+            "DEFAULT_MODEL_PATH",
             Path("/definitely/missing/yolo11x-seg.pt"),
         ):
             with self.assertRaisesRegex(
                 RuntimeError,
                 "Missing cell segmentation model: "
                 "models/segmentation/yolo11x-seg.pt",
+            ):
+                launcher.validate_model()
+
+    def test_custom_model_path_is_used(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            model = Path(temporary) / "custom.pt"
+            model.write_bytes(b"custom")
+            with mock.patch.dict(
+                os.environ,
+                {"CELLTRACK_WEIGHTS_PATH": str(model)},
             ):
                 launcher.validate_model()
 

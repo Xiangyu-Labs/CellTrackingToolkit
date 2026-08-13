@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "model": {
+    "version": "model-v1",
+    "path": "models/segmentation/yolo11x-seg.pt",
+    "url": "https://github.com/Xiangyu-Labs/CellTrackingToolkit/releases/download/model-v1/yolo11x-seg.pt",
+    "size": 143999293,
+    "sha256": "629e9a4196c654af6294f2cd748f637044a131d6754b699fc02f13ebe9dbabd4"
+  }
+}

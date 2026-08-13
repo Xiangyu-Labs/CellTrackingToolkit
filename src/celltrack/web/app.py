@@ -6,13 +6,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from celltrack import __version__
 from celltrack.analysis.storage import AnalysisNotFoundError, analysis_store
 from celltrack.web.routes import analysis, datasets, jobs
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="Cell Tracking Studio", version="2.0.0")
+app = FastAPI(title="Cell Tracking Studio", version=__version__)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(datasets.router)
 app.include_router(jobs.router)
@@ -24,7 +25,7 @@ def health() -> dict[str, str]:
     return {
         "status": "ok",
         "app": "cell-tracking-studio",
-        "version": "2.0.0",
+        "version": __version__,
     }
 
 

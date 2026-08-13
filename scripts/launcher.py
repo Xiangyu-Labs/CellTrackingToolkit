@@ -18,17 +18,20 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 import webbrowser
 
+from celltrack import __version__
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LOG_DIR = PROJECT_ROOT / "workspace" / "logs"
 LOG_PATH = LOG_DIR / "launcher.log"
-MODEL_PATH = PROJECT_ROOT / "models" / "segmentation" / "yolo11x-seg.pt"
+DEFAULT_MODEL_PATH = (
+    PROJECT_ROOT / "models" / "segmentation" / "yolo11x-seg.pt"
+)
 HOST = "127.0.0.1"
 PORTS = range(8000, 8011)
 HEALTH_RESPONSE = {
     "status": "ok",
     "app": "cell-tracking-studio",
-    "version": "2.0.0",
+    "version": __version__,
 }
 
 
@@ -66,7 +69,6 @@ def is_celltrack_service(port: int) -> bool:
 
 def port_is_available(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             probe.bind((HOST, port))
         except OSError:
@@ -116,8 +118,18 @@ def stop_process(process: subprocess.Popen[str]) -> None:
             LOGGER.error("Server process did not exit after terminate and kill")
 
 
+def model_path() -> Path:
+    configured = os.environ.get("CELLTRACK_WEIGHTS_PATH")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return DEFAULT_MODEL_PATH
+
+
 def validate_model() -> None:
-    if not MODEL_PATH.is_file():
+    path = model_path()
+    if not path.is_file():
+        if os.environ.get("CELLTRACK_WEIGHTS_PATH"):
+            raise RuntimeError(f"Missing custom cell segmentation model: {path}")
         raise RuntimeError(
             "Missing cell segmentation model: models/segmentation/yolo11x-seg.pt\n"
             "Place the model supplied by the laboratory at the path above and "

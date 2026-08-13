@@ -30,7 +30,7 @@ run_logged() {
 }
 
 : >"$BOOTSTRAP_LOG"
-log "[1/4] Checking startup tools"
+log "[1/6] Checking startup tools"
 
 if [ ! -x "$UV_BIN" ]; then
   log "An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies."
@@ -52,7 +52,7 @@ if [ ! -x "$UV_BIN" ]; then
   fi
 fi
 
-log "[2/4] Preparing Python 3.11"
+log "[2/6] Preparing Python 3.11"
 if ! run_logged "$UV_BIN" python install 3.11; then
   fail "Python 3.11 could not be prepared. Check your connection and start the application again."
 fi
@@ -74,7 +74,24 @@ if [ "$NEEDS_REBUILD" -eq 1 ]; then
   fi
 fi
 
-log "[3/4] Installing or checking application dependencies"
+if [ "${CELLTRACK_UPDATE_RESTARTED:-0}" != "1" ]; then
+  log "[3/6] Checking for application updates"
+  "$UV_BIN" run --python 3.11 --no-project \
+    "$SCRIPT_DIR/scripts/updater.py" --app-only >>"$BOOTSTRAP_LOG" 2>&1
+  UPDATE_STATUS=$?
+  if [ "$UPDATE_STATUS" -eq 10 ]; then
+    log "Restarting with the updated application..."
+    CELLTRACK_UPDATE_RESTARTED=1
+    export CELLTRACK_UPDATE_RESTARTED
+    exec "$SCRIPT_DIR/start.sh" "$@"
+  elif [ "$UPDATE_STATUS" -ne 0 ]; then
+    log "Automatic update check failed; continuing with this version."
+  fi
+else
+  log "[3/6] Application update applied"
+fi
+
+log "[4/6] Installing or checking application dependencies"
 if ! run_logged "$UV_BIN" sync --locked --python 3.11 --managed-python; then
   fail "The application environment could not be installed. Do not modify Python manually; start the application again, and send the log to technical support if it still fails."
 fi
@@ -89,5 +106,10 @@ if ! "$VENV_PYTHON" -c 'import fastapi, uvicorn, ultralytics, PIL, numpy, scipy,
   fi
 fi
 
-log "[4/4] Starting Cell Tracking Studio"
+log "[5/6] Checking the segmentation model"
+if ! run_logged "$VENV_PYTHON" "$SCRIPT_DIR/scripts/updater.py" --model-only; then
+  fail "The segmentation model could not be downloaded. Check the internet connection and start the application again."
+fi
+
+log "[6/6] Starting Cell Tracking Studio"
 exec "$VENV_PYTHON" "$SCRIPT_DIR/scripts/launcher.py" "$@"

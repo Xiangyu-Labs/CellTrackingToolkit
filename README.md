@@ -1,10 +1,12 @@
 # Cell Tracking Studio
 
-Cell Tracking Studio is a local application for cell segmentation, trajectory tracking, and group comparison. Researchers do not need to configure Python or Conda manually; the first launch creates an isolated environment and installs the dependencies automatically.
+Cell Tracking Studio is a local application for cell segmentation, trajectory tracking, and group comparison. Researchers do not need to configure Python, Conda, or Git manually. The first launch creates an isolated environment, installs dependencies, and downloads the segmentation model automatically.
 
 ## One-click startup
 
-An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies such as Ultralytics and PyTorch. After installation, later launches reuse the local environment and download cache.
+An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies such as Ultralytics and PyTorch, plus the approximately 137 MiB segmentation model. After installation, later launches reuse the local environment and download cache.
+
+Every launch checks for a new application release. Git clones are updated only when the current branch is `main`, tracked files have no local changes, and the update can be applied as a fast-forward. Downloaded ZIP copies update from verified GitHub Release packages. If the update server is unavailable, the installed version starts normally.
 
 ### macOS
 
@@ -24,15 +26,25 @@ Double-click `start-linux.desktop`. If the desktop environment asks for permissi
 ./start.sh
 ```
 
-## Required experimental resources
+## Experimental resources
 
-The project requires the segmentation model supplied by the laboratory:
+The first launch downloads the laboratory segmentation model to:
 
 ```text
 models/segmentation/yolo11x-seg.pt
 ```
 
-The launcher does not substitute a general-purpose YOLO model for the experimental model, because doing so could produce incorrect scientific results. Place experimental images in `Datasets/`.
+The launcher verifies the model's exact file size and SHA-256 checksum. It does not substitute a general-purpose YOLO model, because doing so could produce incorrect scientific results.
+
+Place experimental images in `Datasets/`. Application updates never replace or delete `Datasets/`, `models/`, or `workspace/`.
+
+To use a different laboratory model, set `CELLTRACK_WEIGHTS_PATH` to its absolute path. A custom model is checked for existence but is never downloaded or overwritten by the updater.
+
+To skip the application update check for one launch, set:
+
+```sh
+CELLTRACK_SKIP_UPDATE=1
+```
 
 ## Startup failures
 

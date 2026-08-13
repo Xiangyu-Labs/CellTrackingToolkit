@@ -105,7 +105,11 @@ class LauncherValidationTests(unittest.TestCase):
             "MODEL_PATH",
             Path("/definitely/missing/yolo11x-seg.pt"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "缺少细胞分割模型"):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Missing cell segmentation model: "
+                "models/segmentation/yolo11x-seg.pt",
+            ):
                 launcher.validate_model()
 
     def test_self_check_imports_application_dependencies(self):
@@ -156,7 +160,11 @@ class ShellBootstrapTests(unittest.TestCase):
             calls = uv_log.read_text(encoding="utf-8")
             self.assertIn("venv --clear --python 3.11 --managed-python", calls)
             self.assertIn("sync --locked --python 3.11 --managed-python", calls)
-            self.assertIn("正在自动修复", completed.stdout)
+            self.assertIn(
+                "An incomplete or transferred application environment was "
+                "detected. Repairing it automatically...",
+                completed.stdout,
+            )
 
 
 if __name__ == "__main__":

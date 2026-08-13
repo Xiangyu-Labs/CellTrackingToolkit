@@ -8,7 +8,7 @@ STATUS=$?
 
 if [[ $STATUS -ne 0 ]]; then
   echo
-  read "?启动失败。按回车键关闭此窗口..."
+  read "?Startup failed. Press Return to close this window..."
 fi
 
 exit $STATUS

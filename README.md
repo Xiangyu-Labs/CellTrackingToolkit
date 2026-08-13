@@ -1,44 +1,44 @@
 # Cell Tracking Studio
 
-Cell Tracking Studio 是用于细胞分割、轨迹追踪和组间比较的本地软件。无需科研人员手动配置 Python 或 Conda；首次启动会自动建立隔离环境并安装依赖。
+Cell Tracking Studio is a local application for cell segmentation, trajectory tracking, and group comparison. Researchers do not need to configure Python or Conda manually; the first launch creates an isolated environment and installs the dependencies automatically.
 
-## 一键启动
+## One-click startup
 
-首次安装需要联网，通常需要数分钟。Ultralytics、PyTorch 等科学计算依赖体积较大，可能下载数 GB。安装完成后，后续启动会直接复用本地环境和下载缓存。
+An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies such as Ultralytics and PyTorch. After installation, later launches reuse the local environment and download cache.
 
 ### macOS
 
-双击 `start.command`。
+Double-click `start.command`.
 
-如果 macOS 第一次阻止运行，请右键点击 `start.command`，选择“打开”，再确认一次。启动完成后浏览器会自动打开。
+If macOS blocks it the first time, right-click `start.command`, select **Open**, and confirm once more. The browser opens automatically after startup completes.
 
 ### Windows
 
-双击 `start.bat`。不需要预先安装 Python、Conda 或 Git。
+Double-click `start.bat`. Python, Conda, and Git do not need to be installed in advance.
 
 ### Linux
 
-双击 `start-linux.desktop`。如果桌面环境询问权限，请选择“允许启动”。也可以在项目目录运行：
+Double-click `start-linux.desktop`. If the desktop environment asks for permission, select **Allow Launching**. You can also run this command from the project directory:
 
 ```sh
 ./start.sh
 ```
 
-## 必需的实验资源
+## Required experimental resources
 
-项目需要实验室提供的分割模型：
+The project requires the segmentation model supplied by the laboratory:
 
 ```text
 models/segmentation/yolo11x-seg.pt
 ```
 
-启动器不会用通用 YOLO 模型替换实验模型，以免产生错误的科研结果。实验图像放在 `Datasets/` 中。
+The launcher does not substitute a general-purpose YOLO model for the experimental model, because doing so could produce incorrect scientific results. Place experimental images in `Datasets/`.
 
-## 启动失败
+## Startup failures
 
-启动器会自动识别并修复损坏、未完成或从其他电脑复制来的 `.venv`。安装中断时，重新双击启动即可。
+The launcher automatically detects and repairs a damaged, incomplete, or transferred `.venv`. If installation is interrupted, double-click the launcher again.
 
-如果仍然失败，请把以下日志发送给技术人员：
+If startup still fails, send these logs to technical support:
 
 ```text
 workspace/logs/bootstrap.log
@@ -46,4 +46,4 @@ workspace/logs/launcher.log
 workspace/logs/server.log
 ```
 
-不需要手动删除实验数据、模型或分析结果。
+You do not need to delete experimental data, models, or analysis results manually.

@@ -12,11 +12,6 @@
 .stage-button > span { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 50%; }
 .stage-button.active { background: var(--surface); color: var(--primary-dark); box-shadow: 0 2px 8px rgba(21,48,43,.06); }
 .stage-button.active > span { background: var(--primary); border-color: var(--primary); color: white; }
-.language-toggle { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; color: var(--muted); }
-.language-toggle input { appearance: none; width: 38px; height: 22px; margin: 0; border-radius: 11px; background: var(--border-strong); position: relative; }
-.language-toggle input::after { content: ""; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; border-radius: 50%; background: white; transition: transform .18s ease; }
-.language-toggle input:checked { background: var(--primary); }
-.language-toggle input:checked::after { transform: translateX(16px); }
 .search-field { min-height: 46px; display: flex; align-items: center; gap: 9px; padding: 0 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .search-field:focus-within { border-color: var(--focus); }
 .search-field svg { width: 19px; color: var(--muted); }

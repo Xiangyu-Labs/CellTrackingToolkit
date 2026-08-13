@@ -1,8 +1,8 @@
 import { api } from "./api.js?v=2";
-import { applyStaticTranslations, t } from "./i18n.js?v=5";
+import { formatText } from "./strings.js?v=1";
 import { state, escapeHtml, setTabInUrl } from "./state.js?v=3";
-import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=5";
-import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=6";
+import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=6";
+import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=7";
 
 const $ = selector => document.querySelector(selector);
 const icons = () => window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
@@ -31,16 +31,6 @@ function showTab(tab, updateUrl = true) {
   icons();
 }
 
-function applyLanguage() {
-  applyStaticTranslations();
-  $("#languageToggle").checked = state.language === "en";
-  renderWorkflow();
-  renderCompare();
-  renderHistory();
-  renderJobs();
-  icons();
-}
-
 async function loadJobs() {
   try { state.jobs = await api("/api/jobs"); renderWorkflow(); renderJobs(); }
   catch (_error) { state.jobs = []; }
@@ -59,9 +49,9 @@ function renderJobs() {
   const active = state.jobs.filter(job => ["queued", "running", "cancelling"].includes(job.status) && (state.tab === "compare" || job.kind === state.tab));
   const root = $("#jobBar");
   root.hidden = !active.length || state.tab === "compare";
-  root.innerHTML = active.map(job => `<div class="job-item"><span><strong>${escapeHtml(job.current_dataset || t("queued"))}</strong> · ${job.progress}/${job.total}</span><button class="button secondary cancel-batch" data-id="${job.id}" type="button"><i data-lucide="square"></i>${t("cancelBatch")}</button></div>`).join("");
+  root.innerHTML = active.map(job => `<div class="job-item"><span><strong>${escapeHtml(job.current_dataset || formatText("queued"))}</strong> | ${job.progress}/${job.total}</span><button class="button secondary cancel-batch" data-id="${job.id}" type="button"><i data-lucide="square"></i>${formatText("cancelBatch")}</button></div>`).join("");
   root.querySelectorAll(".cancel-batch").forEach(button => button.addEventListener("click", async () => {
-    if (!confirm(t("confirmCancel"))) return;
+    if (!confirm(formatText("confirmCancel"))) return;
     button.disabled = true;
     try { await api(`/api/jobs/${button.dataset.id}/cancel`, { method: "POST" }); await loadJobs(); }
     catch (error) { toast(error.message); }
@@ -94,7 +84,7 @@ function openViewer(datasetId, kind) {
   const dataset = state.overview.datasets.find(item => item.id === datasetId);
   if (!dataset) return;
   state.viewer = { datasetId, kind, index: 1, total: dataset.image_count, name: dataset.name };
-  $("#resultKind").textContent = t(kind === "segmentation" ? "segResult" : "trackResult");
+  $("#resultKind").textContent = formatText(kind === "segmentation" ? "segResult" : "trackResult");
   $("#resultTitle").textContent = dataset.name;
   $("#frameSlider").max = dataset.image_count;
   $("#resultDialog").showModal();
@@ -130,7 +120,7 @@ async function createComparison() {
     refreshHistoryWhenComplete(task.id);
   } catch (error) {
     taskWindow?.close();
-    toast(error.message || t("comparisonFailed"));
+    toast(error.message || formatText("comparisonFailed"));
   }
 }
 
@@ -144,9 +134,9 @@ async function refreshHistoryWhenComplete(taskId) {
       }
     } while (["queued", "running"].includes(task.status));
     if (task.status === "completed") await loadHistory();
-    else toast(task.error || t("comparisonFailed"));
+    else toast(task.error || formatText("comparisonFailed"));
   } catch (error) {
-    toast(error.message || t("comparisonFailed"));
+    toast(error.message || formatText("comparisonFailed"));
   }
 }
 
@@ -158,19 +148,18 @@ async function loadHistory() {
 function renderHistory() {
   const root = $("#historyList");
   if (!root) return;
-  if (!state.history.length) { root.innerHTML = `<p class="empty-state">${t("noHistory")}</p>`; return; }
-  const locale = state.language === "zh" ? "zh-CN" : "en";
+  if (!state.history.length) { root.innerHTML = `<p class="empty-state">${formatText("noHistory")}</p>`; return; }
   root.innerHTML = state.history.map(result => {
-    const created = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(result.created_at));
-    const groups = result.groups.map(group => `${escapeHtml(group.name)} (${group.datasets.length})`).join(" · ");
+    const created = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(result.created_at));
+    const groups = result.groups.map(group => `${escapeHtml(group.name)} (${group.datasets.length})`).join(" | ");
     const url = new URL(result.result_url, location.origin).href;
-    return `<div class="history-item"><a href="${result.result_url}" target="_blank" rel="noopener"><strong>${created}</strong><small>${groups}</small><code>${escapeHtml(url)}</code></a><button class="icon-button danger delete-analysis" data-id="${result.id}" aria-label="${t("deleteResult")}" title="${t("deleteResult")}"><i data-lucide="trash-2"></i></button></div>`;
+    return `<div class="history-item"><a href="${result.result_url}" target="_blank" rel="noopener"><strong>${created}</strong><small>${groups}</small><code>${escapeHtml(url)}</code></a><button class="icon-button danger delete-analysis" data-id="${result.id}" aria-label="${formatText("deleteResult")}" title="${formatText("deleteResult")}"><i data-lucide="trash-2"></i></button></div>`;
   }).join("");
   root.querySelectorAll(".delete-analysis").forEach(button => button.addEventListener("click", async () => {
-    if (!confirm(t("confirmDelete"))) return;
+    if (!confirm(formatText("confirmDelete"))) return;
     button.disabled = true;
     try { await api(`/api/analysis/${button.dataset.id}`, { method: "DELETE" }); state.history = state.history.filter(result => result.id !== button.dataset.id); renderHistory(); }
-    catch (error) { toast(error.message || t("deleteFailed")); button.disabled = false; }
+    catch (error) { toast(error.message || formatText("deleteFailed")); button.disabled = false; }
   }));
   icons();
 }
@@ -178,12 +167,11 @@ function renderHistory() {
 function bindEvents() {
   document.querySelectorAll(".stage-button").forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
   $("#sidebarToggle").addEventListener("click", () => { state.sidebarCollapsed = !state.sidebarCollapsed; $("#sidebar").classList.toggle("collapsed", state.sidebarCollapsed); localStorage.setItem("celltrack-sidebar-collapsed", state.sidebarCollapsed); });
-  $("#languageToggle").addEventListener("change", event => { state.language = event.target.checked ? "en" : "zh"; localStorage.setItem("celltrack-language", state.language); applyLanguage(); });
   $("#datasetSearch").addEventListener("input", event => { state.query = event.target.value; renderWorkflow(); });
   $("#selectVisible").addEventListener("click", () => { filteredDatasets().forEach(dataset => state.selected.add(dataset.id)); renderWorkflow(); });
   $("#clearVisible").addEventListener("click", () => { filteredDatasets().forEach(dataset => state.selected.delete(dataset.id)); renderWorkflow(); });
   $("#runButton").addEventListener("click", startJob);
-  $("#addGroup").addEventListener("click", () => { if (!addGroup()) toast(t("groupLimit")); });
+  $("#addGroup").addEventListener("click", () => { if (!addGroup()) toast(formatText("groupLimit")); });
   $("#removeGroup").addEventListener("click", removeActiveGroup);
   $("#groupSearch").addEventListener("input", event => {
     state.groupQuery = event.target.value;
@@ -205,8 +193,6 @@ async function init() {
   bindEvents();
   configureWorkflow({ openViewer });
   $("#sidebar").classList.toggle("collapsed", state.sidebarCollapsed);
-  applyStaticTranslations();
-  $("#languageToggle").checked = state.language === "en";
   try {
     const [overview, options, jobs, history] = await Promise.all([api("/api/overview"), api("/api/analysis/options"), api("/api/jobs"), api("/api/analysis")]);
     state.overview = overview; state.jobs = jobs; state.history = history; initializeCompare(options);
@@ -214,7 +200,7 @@ async function init() {
     showTab(state.tab, false);
     renderJobs(); renderHistory();
     if (jobs.some(job => ["queued", "running", "cancelling"].includes(job.status))) pollJobs();
-  } catch (error) { toast(error.message || t("requestFailed")); }
+  } catch (error) { toast(error.message || formatText("requestFailed")); }
   icons();
 }
 

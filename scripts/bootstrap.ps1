@@ -25,8 +25,8 @@ function Write-Stage([string]$Message) {
 
 function Stop-Launch([string]$Message) {
     Write-Stage ""
-    Write-Stage "启动准备失败：$Message"
-    Write-Stage "详细日志：$BootstrapLog"
+    Write-Stage "Startup preparation failed: $Message"
+    Write-Stage "Detailed log: $BootstrapLog"
     exit 1
 }
 
@@ -42,9 +42,9 @@ function Invoke-Logged {
 }
 
 try {
-    Write-Stage "[1/4] 检查启动工具"
+    Write-Stage "[1/4] Checking startup tools"
     if (-not (Test-Path $UvExe -PathType Leaf)) {
-        Write-Stage "首次安装需要联网，通常需要数分钟，并可能下载数 GB 的科学计算依赖。"
+        Write-Stage "An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies."
         $Installer = Join-Path $ToolsDir "install.ps1"
         try {
             Invoke-WebRequest -UseBasicParsing `
@@ -52,7 +52,7 @@ try {
                 -OutFile $Installer
         }
         catch {
-            Stop-Launch "首次安装需要联网。请检查网络连接后重新双击启动。"
+            Stop-Launch "An internet connection is required for the first installation. Check your connection and start the application again."
         }
         $env:UV_UNMANAGED_INSTALL = $ToolsDir
         try {
@@ -62,19 +62,19 @@ try {
             }
         }
         catch {
-            Stop-Launch "启动工具安装失败。请检查网络连接后重新双击启动。"
+            Stop-Launch "The startup tool could not be installed. Check your connection and start the application again."
         }
         finally {
             Remove-Item Env:\UV_UNMANAGED_INSTALL -ErrorAction SilentlyContinue
         }
     }
 
-    Write-Stage "[2/4] 准备 Python 3.11"
+    Write-Stage "[2/4] Preparing Python 3.11"
     try {
         Invoke-Logged $UvExe python install 3.11
     }
     catch {
-        Stop-Launch "Python 3.11 准备失败。请检查网络连接后重新双击启动。"
+        Stop-Launch "Python 3.11 could not be prepared. Check your connection and start the application again."
     }
 
     $NeedsRebuild = $false
@@ -91,40 +91,40 @@ try {
     }
 
     if ($NeedsRebuild) {
-        Write-Stage "检测到不完整或来自其他电脑的软件环境，正在自动修复..."
+        Write-Stage "An incomplete or transferred application environment was detected. Repairing it automatically..."
         try {
             Invoke-Logged $UvExe venv --clear --python 3.11 --managed-python (Join-Path $ProjectRoot ".venv")
         }
         catch {
-            Stop-Launch "损坏的软件环境无法自动修复。请将日志发送给技术人员。"
+            Stop-Launch "The damaged application environment could not be repaired automatically. Send the log to technical support."
         }
     }
 
-    Write-Stage "[3/4] 安装或检查软件依赖"
+    Write-Stage "[3/4] Installing or checking application dependencies"
     try {
         Invoke-Logged $UvExe sync --locked --python 3.11 --managed-python
     }
     catch {
-        Stop-Launch "软件环境安装失败。无需手动处理 Python，请重新双击启动；如果仍然失败，请将日志发送给技术人员。"
+        Stop-Launch "The application environment could not be installed. Do not modify Python manually; start the application again, and send the log to technical support if it still fails."
     }
 
     & $VenvPython -c "import fastapi, uvicorn, ultralytics, PIL, numpy, scipy, matplotlib, celltrack" *>> $BootstrapLog
     if ($LASTEXITCODE -ne 0) {
-        Write-Stage "依赖检查失败，正在重建软件环境..."
+        Write-Stage "The dependency check failed. Rebuilding the application environment..."
         try {
             Invoke-Logged $UvExe venv --clear --python 3.11 --managed-python (Join-Path $ProjectRoot ".venv")
             Invoke-Logged $UvExe sync --locked --python 3.11 --managed-python
         }
         catch {
-            Stop-Launch "软件环境重建后仍无法安装依赖。请将日志发送给技术人员。"
+            Stop-Launch "Dependencies still could not be installed after rebuilding the application environment. Send the log to technical support."
         }
     }
 
-    Write-Stage "[4/4] 启动 Cell Tracking Studio"
+    Write-Stage "[4/4] Starting Cell Tracking Studio"
     & $VenvPython (Join-Path $ProjectRoot "scripts\launcher.py") @LauncherArguments
     exit $LASTEXITCODE
 }
 catch {
     Add-Content -Path $BootstrapLog -Value ($_ | Out-String) -Encoding UTF8
-    Stop-Launch "发生未预期错误。请将日志发送给技术人员。"
+    Stop-Launch "An unexpected error occurred. Send the log to technical support."
 }

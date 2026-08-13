@@ -1,5 +1,5 @@
 import { state, escapeHtml } from "./state.js?v=3";
-import { t } from "./i18n.js?v=5";
+import { formatText } from "./strings.js?v=1";
 
 let openViewer = () => {};
 
@@ -22,11 +22,11 @@ export function badge(dataset, kind) {
   const job = activeJob(dataset.id, kind);
   const status = processState(dataset, kind);
   const completed = status === "completed";
-  const label = completed ? t(kind === "segmentation" ? "completedSeg" : "completedTrack")
-    : status === "idle" ? t(kind === "segmentation" ? "idleSeg" : "idleTrack")
+  const label = completed ? formatText(kind === "segmentation" ? "completedSeg" : "completedTrack")
+    : status === "idle" ? formatText(kind === "segmentation" ? "idleSeg" : "idleTrack")
     : status === "processing" && kind === "segmentation" ? `${job?.item_progress || 0}/${job?.item_total || dataset.image_count}`
-    : status === "processing" ? t("processingTrack")
-    : t(status);
+    : status === "processing" ? formatText("processingTrack")
+    : formatText(status);
   const icon = completed ? "circle-check" : status === "failed" ? "circle-alert" : status === "processing" || status === "cancelling" ? "loader-circle" : status === "queued" ? "clock-3" : "circle-dashed";
   if (completed) return `<button type="button" class="badge done result-badge" data-id="${dataset.id}" data-kind="${kind}"><i data-lucide="${icon}"></i>${label}</button>`;
   return `<span class="badge ${status}"><i data-lucide="${icon}"></i>${label}</span>`;
@@ -44,13 +44,13 @@ export function filteredDatasets() {
 export function renderWorkflow() {
   if (!state.overview || state.tab === "compare") return;
   const tracking = state.tab === "tracking";
-  document.querySelector("#stageTitle").textContent = t(tracking ? "tracking" : "segmentation");
+  document.querySelector("#stageTitle").textContent = formatText(tracking ? "tracking" : "segmentation");
   const filters = [
     ["all", "all"], ["idle", tracking ? "idleTrack" : "idleSeg"], ["queued", "queued"],
     ["processing", tracking ? "processingTrack" : "processingSeg"], ["completed", tracking ? "completedTrack" : "completedSeg"], ["failed", "failed"], ["cancelling", "cancelling"]
   ];
   const filterRoot = document.querySelector("#statusFilters");
-  filterRoot.innerHTML = filters.map(([value, key]) => `<button type="button" data-filter="${value}" class="${state.filter === value ? "active" : ""}" aria-pressed="${state.filter === value}">${t(key)}</button>`).join("");
+  filterRoot.innerHTML = filters.map(([value, key]) => `<button type="button" data-filter="${value}" class="${state.filter === value ? "active" : ""}" aria-pressed="${state.filter === value}">${formatText(key)}</button>`).join("");
   filterRoot.querySelectorAll("button").forEach(button => button.addEventListener("click", () => { state.filter = button.dataset.filter; renderWorkflow(); }));
 
   const datasets = filteredDatasets();
@@ -63,7 +63,7 @@ export function renderWorkflow() {
   document.querySelectorAll(".result-badge").forEach(button => button.addEventListener("click", () => openViewer(button.dataset.id, button.dataset.kind)));
   document.querySelector("#selectedCount").textContent = state.selected.size;
   document.querySelector("#runButton").disabled = state.selected.size === 0;
-  document.querySelector("#runButton span").textContent = t(tracking ? "runTrack" : "runSeg");
-  document.querySelector("#actionHint").textContent = state.selected.size ? t("runCount", { count: state.selected.size }) : t("choose");
+  document.querySelector("#runButton span").textContent = formatText(tracking ? "runTrack" : "runSeg");
+  document.querySelector("#actionHint").textContent = state.selected.size ? formatText("runCount", { count: state.selected.size }) : formatText("choose");
   window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
 }

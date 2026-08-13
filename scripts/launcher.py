@@ -80,7 +80,10 @@ def select_port() -> tuple[int, bool]:
             return port, True
         if port_is_available(port):
             return port, False
-    raise RuntimeError("端口 8000 至 8010 均被其他程序占用。请关闭部分程序后重试。")
+    raise RuntimeError(
+        "All ports from 8000 through 8010 are in use. "
+        "Close some applications and try again."
+    )
 
 
 def wait_until_healthy(
@@ -116,8 +119,9 @@ def stop_process(process: subprocess.Popen[str]) -> None:
 def validate_model() -> None:
     if not MODEL_PATH.is_file():
         raise RuntimeError(
-            "缺少细胞分割模型：models/segmentation/yolo11x-seg.pt\n"
-            "请将实验室提供的模型文件放入上述位置后重新启动。"
+            "Missing cell segmentation model: models/segmentation/yolo11x-seg.pt\n"
+            "Place the model supplied by the laboratory at the path above and "
+            "restart the application."
         )
 
 
@@ -141,7 +145,7 @@ def run_application(*, no_browser: bool = False) -> int:
     url = f"http://{HOST}:{port}"
 
     if already_running:
-        print(f"Cell Tracking Studio 已在运行：{url}")
+        print(f"Cell Tracking Studio is already running: {url}")
         LOGGER.info("Using existing Cell Tracking Studio service at %s", url)
         if not no_browser:
             webbrowser.open(url)
@@ -187,12 +191,12 @@ def run_application(*, no_browser: bool = False) -> int:
         if not wait_until_healthy(port, process):
             stop_process(process)
             raise RuntimeError(
-                "服务未能在 60 秒内启动。\n"
-                f"请将日志发送给技术人员：{server_log_path}"
+                "The server did not start within 60 seconds.\n"
+                f"Detailed log: {server_log_path}"
             )
 
-        print(f"Cell Tracking Studio：{url}")
-        print("关闭此终端窗口即可停止软件。")
+        print(f"Cell Tracking Studio: {url}")
+        print("Close this terminal window to stop the application.")
         LOGGER.info("Server is healthy at %s", url)
         if not no_browser:
             webbrowser.open(url)
@@ -229,8 +233,8 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         LOGGER.exception("Launcher failed")
         print()
-        print(f"启动失败：{exc}")
-        print(f"详细日志：{LOG_PATH}")
+        print(f"Startup failed: {exc}")
+        print(f"Detailed log: {LOG_PATH}")
         return 1
 
 

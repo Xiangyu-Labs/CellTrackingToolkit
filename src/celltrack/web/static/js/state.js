@@ -3,7 +3,6 @@ const requestedTab = new URL(location.href).searchParams.get("tab");
 
 export const state = {
   tab: allowedTabs.has(requestedTab) ? requestedTab : "segmentation",
-  language: localStorage.getItem("celltrack-language") || (navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en"),
   sidebarCollapsed: localStorage.getItem("celltrack-sidebar-collapsed") === "true",
   overview: null,
   jobs: [],

@@ -1,5 +1,5 @@
 import { state, escapeHtml } from "./state.js?v=3";
-import { t } from "./i18n.js?v=5";
+import { formatText } from "./strings.js?v=1";
 
 const numericFields = [
   ["long_track_min_observations", "Long-track observations", 1],
@@ -66,7 +66,7 @@ export function renderCompare() {
   list.innerHTML = datasets.length ? datasets.map(dataset => {
     const searchText = `${dataset.name} ${dataset.relative_path}`.toLowerCase();
     return `<label class="group-dataset-option" data-search="${escapeHtml(searchText)}" ${searchText.includes(query) ? "" : "hidden"}><input type="checkbox" data-id="${dataset.id}" ${active.ids.has(dataset.id) ? "checked" : ""}><span><strong>${escapeHtml(dataset.name)}</strong><small>${escapeHtml(dataset.group_path || "Datasets")}</small></span></label>`;
-  }).join("") : `<div class="empty-state">${t("empty")}</div>`;
+  }).join("") : `<div class="empty-state">${formatText("empty")}</div>`;
   list.querySelectorAll("input").forEach(input => input.addEventListener("change", () => { input.checked ? active.ids.add(input.dataset.id) : active.ids.delete(input.dataset.id); renderCompare(); }));
 
   const numericRoot = document.querySelector("#numericParameters");
@@ -113,8 +113,8 @@ export function updateCompareValidation() {
   const button = document.querySelector("#analyzeButton");
   button.disabled = !valid;
   button.setAttribute("aria-busy", "false");
-  button.innerHTML = `<i data-lucide="chart-no-axes-combined"></i><span>${t("generate")}</span>`;
-  document.querySelector("#compareHint").textContent = valid ? t("ready", { count: state.groups.length }) : t("incomplete");
+  button.innerHTML = `<i data-lucide="chart-no-axes-combined"></i><span>${formatText("generate")}</span>`;
+  document.querySelector("#compareHint").textContent = valid ? formatText("ready", { count: state.groups.length }) : formatText("incomplete");
   window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
 }
 

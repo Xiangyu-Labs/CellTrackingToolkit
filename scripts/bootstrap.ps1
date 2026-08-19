@@ -35,9 +35,24 @@ function Invoke-Logged {
         [Parameter(Mandatory = $true)][string]$FilePath,
         [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
     )
-    & $FilePath @Arguments *>> $BootstrapLog
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE"
+
+    # Windows PowerShell can promote a native program's stderr output to a
+    # terminating error when ErrorActionPreference is Stop. Tools such as uv
+    # write normal download progress to stderr, so let the process finish and
+    # use its exit code to determine whether it failed.
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    $ExitCode = 1
+    try {
+        $ErrorActionPreference = "Continue"
+        & $FilePath @Arguments *>> $BootstrapLog
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+
+    if ($ExitCode -ne 0) {
+        throw "Command failed with exit code $ExitCode"
     }
 }
 
@@ -71,7 +86,7 @@ try {
 
     Write-Stage "[2/6] Preparing Python 3.11"
     try {
-        Invoke-Logged $UvExe python install 3.11
+        Invoke-Logged $UvExe --verbose python install 3.11
     }
     catch {
         Stop-Launch "Python 3.11 could not be prepared. Check your connection and start the application again."

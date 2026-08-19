@@ -144,6 +144,23 @@ class LauncherValidationTests(unittest.TestCase):
 
 
 class ShellBootstrapTests(unittest.TestCase):
+    def test_windows_bootstrap_does_not_treat_native_stderr_as_failure(self):
+        bootstrap = (ROOT / "scripts" / "bootstrap.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        function_start = bootstrap.index("function Invoke-Logged")
+        function_end = bootstrap.index("\n}\n", function_start)
+        invoke_logged = bootstrap[function_start:function_end]
+
+        self.assertIn('$ErrorActionPreference = "Continue"', invoke_logged)
+        self.assertIn("$ExitCode = $LASTEXITCODE", invoke_logged)
+        self.assertIn('if ($ExitCode -ne 0)', invoke_logged)
+        self.assertIn(
+            "Invoke-Logged $UvExe --verbose python install 3.11",
+            bootstrap,
+        )
+
     def test_broken_environment_triggers_uv_clear_rebuild(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

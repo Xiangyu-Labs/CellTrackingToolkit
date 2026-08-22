@@ -82,6 +82,24 @@ Supported formats: `.bmp`, `.jpeg`, `.jpg`, `.png`, `.tif`, and `.tiff`.
 Application updates do not replace or delete `Datasets/`, `models/`, or
 `workspace/`.
 
+## Analysis methods
+
+Each dataset is treated as one independent experimental replicate. Tracks
+within a dataset are technical observations: track-level metrics are averaged
+within each dataset before group-level inference, and each dataset receives
+equal weight regardless of its track count.
+
+Two-group comparisons use a two-sided Mann-Whitney U test. Comparisons with
+three or more groups use a Kruskal-Wallis test plus pairwise two-sided
+Mann-Whitney U tests. Pairwise p-values are Holm-adjusted within each metric.
+The statistics export includes rank-biserial correlation or epsilon-squared
+effect sizes and reports sample sizes as dataset counts.
+
+MSD is averaged first across tracks within each dataset and then across
+datasets. Curves show a two-sided 95% Student-t confidence interval and stop
+when fewer than half of the group's datasets contribute to a lag. Curves are
+not smoothed or forced to be monotonic.
+
 If startup is interrupted during the first installation, start the application
 again. If it still fails, send the files in `workspace/logs/` to technical
 support.

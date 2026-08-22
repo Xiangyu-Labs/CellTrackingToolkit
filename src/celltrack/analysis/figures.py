@@ -14,10 +14,14 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import stats
 
 
-from celltrack.analysis.compute import msd_summary, statistical_results
+from celltrack.analysis.compute import (
+    dataset_metric_values,
+    msd_summary,
+    statistical_results,
+    turning_angle_distribution,
+)
 from celltrack.analysis.models import SUMMARY_METRICS, TEMPORAL_METRICS
 
 COLORS = ("#156F62", "#D97706", "#2563EB", "#B42318", "#7C3AED", "#087EA4")
@@ -154,8 +158,14 @@ def figure_classification(bundle) -> bytes:
     for trajectory_type in types:
         values = []
         for group in bundle.groups:
-            summaries = bundle.summaries_for(group, True)
-            values.append(sum(item.trajectory_type == trajectory_type for item in summaries) / max(1, len(summaries)) * 100)
+            by_dataset: dict[str, list] = defaultdict(list)
+            for summary in bundle.summaries_for(group, True):
+                by_dataset[summary.dataset].append(summary)
+            dataset_percentages = [
+                sum(item.trajectory_type == trajectory_type for item in summaries) / len(summaries) * 100
+                for summaries in by_dataset.values() if summaries
+            ]
+            values.append(statistics.fmean(dataset_percentages) if dataset_percentages else 0.0)
         axes[0, 0].bar(x, values, bottom=bottom, label=trajectory_type, color=TYPE_COLORS[trajectory_type])
         bottom += np.asarray(values)
     axes[0, 0].set_xticks(x, bundle.groups, rotation=20, ha="right")
@@ -164,87 +174,64 @@ def figure_classification(bundle) -> bytes:
     axes[0, 0].legend(frameon=False, fontsize=8)
     _style(axes[0, 0])
 
-    directionality = [[item.directionality for item in bundle.summaries_for(group, True)] for group in bundle.groups]
-    turning = [[item.turning_angle_std for item in bundle.summaries_for(group, True)] for group in bundle.groups]
+    directionality = [[value for _dataset, value in dataset_metric_values(bundle, group, "directionality")] for group in bundle.groups]
+    turning = [[value for _dataset, value in dataset_metric_values(bundle, group, "turning_angle_std")] for group in bundle.groups]
     for ax, values, title, ylabel in (
         (axes[0, 1], directionality, "Directionality distribution", "Directionality"),
         (axes[0, 2], turning, "Turning-angle variability", "Std. turning angle (deg)"),
     ):
-        nonempty = [value if value else [0.0] for value in values]
-        plot = ax.boxplot(nonempty, patch_artist=True, tick_labels=bundle.groups, showfliers=False)
-        for index, box in enumerate(plot["boxes"]):
-            box.set_facecolor(COLORS[index % len(COLORS)])
-            box.set_alpha(0.72)
+        positions = [index + 1 for index, group_values in enumerate(values) if group_values]
+        nonempty = [group_values for group_values in values if group_values]
+        if nonempty:
+            plot = ax.boxplot(nonempty, positions=positions, patch_artist=True, showfliers=False, widths=0.5)
+            for position, box in zip(positions, plot["boxes"]):
+                box.set_facecolor(COLORS[(position - 1) % len(COLORS)])
+                box.set_edgecolor(COLORS[(position - 1) % len(COLORS)])
+                box.set_alpha(0.28)
+        for index, group_values in enumerate(values):
+            if not group_values:
+                continue
+            offsets = np.linspace(-0.1, 0.1, len(group_values)) if len(group_values) > 1 else np.asarray([0.0])
+            ax.scatter(index + 1 + offsets, group_values, s=22, color=COLORS[index % len(COLORS)], alpha=0.82, zorder=3)
+        labels = [f"{group}\nn={len(group_values)}" for group, group_values in zip(bundle.groups, values)]
+        ax.set_xticks(np.arange(1, len(bundle.groups) + 1), labels)
         ax.tick_params(axis="x", rotation=20)
         ax.set_title(title)
         ax.set_ylabel(ylabel)
+        if ylabel == "Directionality":
+            ax.set_ylim(0, 1)
         _style(ax)
     fig.tight_layout()
     return _png(fig)
 
 
 def figure_turning_angle_distribution(bundle) -> bytes:
-    values_by_group = [
-        np.asarray([
-            item.turning_angle_std for item in bundle.summaries_for(group, True)
-            if math.isfinite(item.turning_angle_std)
-        ], dtype=float)
-        for group in bundle.groups
-    ]
-    finite = np.concatenate([values for values in values_by_group if len(values)]) if any(len(values) for values in values_by_group) else np.asarray([])
-    if not len(finite):
-        return _empty_figure("Turning-angle variability distribution", "No valid turning-angle values are available.")
-    minimum, maximum = float(np.min(finite)), float(np.max(finite))
-    padding = max((maximum - minimum) * 0.05, 1.0)
-    left, right = minimum - padding, maximum + padding
-    bins = np.linspace(left, right, 21)
+    distributions = [turning_angle_distribution(bundle, group, prefer_long=True) for group in bundle.groups]
+    if not any(distributions):
+        return _empty_figure("Step turning-angle distribution", "No valid turning-angle values are available.")
     fig, axes = _figure(width=8.2, height=4.8)
     ax = axes[0, 0]
-    unavailable = []
-    for index, (group, values) in enumerate(zip(bundle.groups, values_by_group)):
-        if not len(values):
-            unavailable.append(group)
+    for index, (group, points) in enumerate(zip(bundle.groups, distributions)):
+        if not points:
             continue
         color = COLORS[index % len(COLORS)]
-        median = float(np.median(values))
-        ax.hist(values, bins=bins, density=True, alpha=0.2, color=color, edgecolor=color, linewidth=0.7)
-        if len(values) >= 2 and np.ptp(values) > 0:
-            grid = np.linspace(left, right, 400)
-            try:
-                ax.plot(grid, stats.gaussian_kde(values)(grid), color=color, linewidth=2)
-            except np.linalg.LinAlgError:
-                unavailable.append(group)
-        else:
-            unavailable.append(group)
-        ax.axvline(median, color=color, linestyle="--", linewidth=1.5, label=f"{group} (median={median:.1f}°)")
-    ax.set_xlim(left, right)
-    ax.set_xlabel("Turning angle std (°)")
+        angles = np.asarray([point.angle_degrees for point in points])
+        density = np.asarray([point.mean_density for point in points])
+        ax.plot(angles, density, color=color, linewidth=2, label=f"{group} (n={points[0].n} datasets)")
+        valid_ci = np.asarray([point.ci_low is not None and point.ci_high is not None for point in points])
+        if any(valid_ci):
+            low = np.asarray([max(0.0, point.ci_low) if point.ci_low is not None else point.mean_density for point in points])
+            high = np.asarray([point.ci_high if point.ci_high is not None else point.mean_density for point in points])
+            ax.fill_between(angles, low, high, where=valid_ci, color=color, alpha=0.14)
+    ax.set_xlim(0, 180)
+    ax.set_xticks(np.arange(0, 181, 30))
+    ax.set_xlabel("Step turning angle (°)")
     ax.set_ylabel("Density")
-    ax.set_title("Turning-angle variability distribution")
-    if unavailable:
-        ax.text(
-            0.99, 0.02, f"KDE unavailable: {', '.join(unavailable)}",
-            transform=ax.transAxes, ha="right", va="bottom", fontsize=8, color="#61716D",
-        )
+    ax.set_title("Step turning-angle distribution (dataset mean ± 95% CI)")
     ax.legend(frameon=False, fontsize=8)
     _style(ax)
     fig.tight_layout()
     return _png(fig)
-
-
-def _mean_msd(series_list: tuple) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    by_lag: dict[float, list[float]] = defaultdict(list)
-    for series in series_list:
-        for lag, value in zip(series.lag_frames, series.values):
-            if value > 0:
-                by_lag[float(lag)].append(float(value))
-    lag = np.asarray(sorted(by_lag), dtype=float)
-    mean = np.asarray([statistics.fmean(by_lag[value]) for value in lag], dtype=float)
-    sem = np.asarray([
-        statistics.stdev(by_lag[value]) / math.sqrt(len(by_lag[value])) if len(by_lag[value]) > 1 else 0.0
-        for value in lag
-    ])
-    return lag, mean, sem
 
 
 def _plot_msd(bundle, title: str, prefer_long: bool) -> bytes:
@@ -253,24 +240,43 @@ def _plot_msd(bundle, title: str, prefer_long: bool) -> bytes:
     alpha_values = []
     for index, group in enumerate(bundle.groups):
         series = bundle.msd_for(group, prefer_long)
-        lag, mean, sem = _mean_msd(series)
+        points = msd_summary(bundle, group, prefer_long=prefer_long, filter_sparse_tail=True)
+        lag = np.asarray([point.lag for point in points])
+        mean = np.asarray([point.mean for point in points])
         color = COLORS[index % len(COLORS)]
         if len(lag):
             axes[0, 0].plot(lag, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], label=group)
-            axes[0, 0].fill_between(lag, mean - sem, mean + sem, color=color, alpha=0.12)
             axes[0, 1].loglog(lag, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], label=group)
-        alpha_values.append([item.alpha for item in series if item.alpha is not None])
+            valid_ci = np.asarray([point.ci_low is not None and point.ci_high is not None for point in points])
+            if any(valid_ci):
+                low = np.asarray([max(0.0, point.ci_low) if point.ci_low is not None else point.mean for point in points])
+                high = np.asarray([point.ci_high if point.ci_high is not None else point.mean for point in points])
+                axes[0, 0].fill_between(lag, low, high, where=valid_ci, color=color, alpha=0.14)
+        by_dataset: dict[str, list[float]] = defaultdict(list)
+        for item in series:
+            if item.alpha is not None and math.isfinite(item.alpha):
+                by_dataset[item.dataset].append(item.alpha)
+        alpha_values.append([statistics.fmean(values) for values in by_dataset.values() if values])
+    x_label = "Time lag (min)" if bundle.parameters.frame_interval_minutes is not None else "Frame lag"
+    y_label = "MSD (µm²)" if bundle.parameters.microns_per_pixel is not None else "MSD (px²)"
     for ax, subtitle in zip(axes[0, :2], ("Population mean MSD", "Log-log MSD")):
         ax.set_title(subtitle)
-        ax.set_xlabel("Frame lag")
-        ax.set_ylabel("MSD (px2)")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
         ax.legend(frameon=False, fontsize=8)
         _style(ax)
-    nonempty = [values if values else [0.0] for values in alpha_values]
-    boxplot = axes[0, 2].boxplot(nonempty, patch_artist=True, tick_labels=bundle.groups, showfliers=False)
-    for index, box in enumerate(boxplot["boxes"]):
-        box.set_facecolor(COLORS[index % len(COLORS)])
-        box.set_alpha(0.72)
+    positions = [index + 1 for index, values in enumerate(alpha_values) if values]
+    nonempty = [values for values in alpha_values if values]
+    if nonempty:
+        boxplot = axes[0, 2].boxplot(nonempty, positions=positions, patch_artist=True, showfliers=False)
+        for position, box in zip(positions, boxplot["boxes"]):
+            box.set_facecolor(COLORS[(position - 1) % len(COLORS)])
+            box.set_alpha(0.28)
+    for index, values in enumerate(alpha_values):
+        offsets = np.linspace(-0.1, 0.1, len(values)) if len(values) > 1 else np.asarray([0.0])
+        if values:
+            axes[0, 2].scatter(index + 1 + offsets, values, s=22, color=COLORS[index % len(COLORS)], zorder=3)
+    axes[0, 2].set_xticks(np.arange(1, len(bundle.groups) + 1), [f"{group}\nn={len(values)}" for group, values in zip(bundle.groups, alpha_values)])
     axes[0, 2].axhline(1, color="#8B9895", linewidth=1, linestyle="--")
     axes[0, 2].set_title("MSD exponent alpha")
     axes[0, 2].tick_params(axis="x", rotation=20)
@@ -292,7 +298,7 @@ def figure_msd_summary(bundle) -> bytes:
         ax.plot(lag, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], linewidth=2, label=group)
         valid_ci = [point.ci_low is not None and point.ci_high is not None for point in points]
         if any(valid_ci):
-            low = np.asarray([point.ci_low if point.ci_low is not None else point.mean for point in points])
+            low = np.asarray([max(0.0, point.ci_low) if point.ci_low is not None else point.mean for point in points])
             high = np.asarray([point.ci_high if point.ci_high is not None else point.mean for point in points])
             ax.fill_between(lag, low, high, where=np.asarray(valid_ci), color=color, alpha=0.16)
     ax.set_title("MSD comparison (mean ± 95% CI)")
@@ -327,16 +333,6 @@ def _angle_histogram_scale(bundle) -> tuple[np.ndarray, float]:
         if len(counts):
             maximum = max(maximum, int(np.max(counts)))
     return edges, maximum * 1.05
-
-
-def _violin_values(values: list[float]) -> list[float]:
-    if not values:
-        return [-1e-6, 1e-6]
-    if len(values) == 1 or np.ptp(values) == 0:
-        center = float(values[0])
-        epsilon = max(abs(center) * 1e-6, 1e-6)
-        return [center - epsilon, center + epsilon]
-    return values
 
 
 def _pick_representatives(bundle, group: str, count_per_type: int | None = None) -> dict[str, list]:
@@ -470,21 +466,28 @@ def figure_parameter_distributions(bundle) -> bytes:
     columns = min(3, len(metrics))
     rows = math.ceil(len(metrics) / columns)
     fig, axes = _figure(rows, columns, width=4.2, height=3.4)
-    fig.suptitle("Track-level parameter distributions", fontsize=15, y=1.005)
+    fig.suptitle("Dataset-level parameter distributions", fontsize=15, y=1.005)
     result_by_metric = defaultdict(list)
     for result in statistical_results(bundle):
         result_by_metric[result.metric].append(result)
     for ax, (attribute, title) in zip(axes.flat, metrics):
-        values = [[
-            float(value) for item in bundle.summaries_for(group, True)
-            if math.isfinite(value := float(getattr(item, attribute)))
-        ] for group in bundle.groups]
-        nonempty = [_violin_values(group_values) for group_values in values]
-        violin = ax.violinplot(nonempty, showextrema=False, showmedians=True)
-        for index, body in enumerate(violin["bodies"]):
-            body.set_facecolor(COLORS[index % len(COLORS)])
-            body.set_edgecolor(COLORS[index % len(COLORS)])
-            body.set_alpha(0.45)
+        values = [
+            [value for _dataset, value in dataset_metric_values(bundle, group, attribute)]
+            for group in bundle.groups
+        ]
+        positions = [index + 1 for index, group_values in enumerate(values) if group_values]
+        nonempty = [group_values for group_values in values if group_values]
+        if nonempty:
+            boxplot = ax.boxplot(nonempty, positions=positions, patch_artist=True, showfliers=False, widths=0.5)
+            for position, box in zip(positions, boxplot["boxes"]):
+                box.set_facecolor(COLORS[(position - 1) % len(COLORS)])
+                box.set_edgecolor(COLORS[(position - 1) % len(COLORS)])
+                box.set_alpha(0.28)
+        for index, group_values in enumerate(values):
+            if not group_values:
+                continue
+            offsets = np.linspace(-0.1, 0.1, len(group_values)) if len(group_values) > 1 else np.asarray([0.0])
+            ax.scatter(index + 1 + offsets, group_values, s=22, color=COLORS[index % len(COLORS)], alpha=0.82, zorder=3)
         labels = [f"{group}\nn={len(group_values)}" for group, group_values in zip(bundle.groups, values)]
         ax.set_xticks(np.arange(1, len(bundle.groups) + 1), labels, rotation=20, ha="right")
         metric_results = result_by_metric[attribute]
@@ -494,7 +497,7 @@ def figure_parameter_distributions(bundle) -> bytes:
             if result.p_value is None:
                 annotation = "Insufficient data"
             else:
-                annotation = f"Mann–Whitney U p={result.p_value:.3g}\nrᵣᵦ={result.effect_size:.3f}"
+                annotation = f"Mann–Whitney U p={result.p_value:.3g}\nr_rb={result.effect_size:.3f}"
                 comparisons.append((1, 2, _significance_label(result.p_value)))
         else:
             overall = next(result for result in metric_results if result.test == "Kruskal-Wallis")

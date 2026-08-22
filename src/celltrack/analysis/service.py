@@ -20,6 +20,9 @@ def create_analysis(
     names = [name.strip() for name, _ids in groups]
     if len(set(name.casefold() for name in names)) != len(names):
         raise ValueError("Group names must be unique")
+    selected_ids = [dataset_id for _name, dataset_ids in groups for dataset_id in dataset_ids]
+    if len(selected_ids) != len(set(selected_ids)):
+        raise ValueError("Each dataset can belong to only one comparison group")
     prepared = []
     group_metadata: list[dict[str, object]] = []
     for name, (_raw_name, dataset_ids) in zip(names, groups):

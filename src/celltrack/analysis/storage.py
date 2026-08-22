@@ -55,7 +55,7 @@ class AnalysisStore:
                 archive.write(temporary_dir / csv_name, arcname=csv_name)
                 archive.write(temporary_dir / statistics_name, arcname=statistics_name)
             manifest: dict[str, object] = {
-                "schema_version": 3,
+                "schema_version": 4,
                 "id": artifact_id,
                 "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "images": image_entries,

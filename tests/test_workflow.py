@@ -221,7 +221,7 @@ class AnalysisTests(unittest.TestCase):
         )
         tracks = tuple(
             GroupedTrack("A", RawTrack(
-                "sample", track_id, tuple(range(1, 31)), tuple(range(30)), tuple(range(30)),
+                f"sample-{track_id}", track_id, tuple(range(1, 31)), tuple(range(30)), tuple(range(30)),
                 (), (), (), (), (), (), (), (), (), (),
             ))
             for track_id in range(1, 6)
@@ -232,7 +232,7 @@ class AnalysisTests(unittest.TestCase):
             summaries=(),
             msd=tuple(
                 MsdSeries(
-                    "A", "sample", track_id,
+                    "A", f"sample-{track_id}", track_id,
                     (10.0, 20.0) if track_id <= 2 else (10.0,),
                     (100.0, 400.0) if track_id <= 2 else (100.0,),
                     None,
@@ -246,6 +246,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(len(points), 1)
         self.assertEqual(points[0].lag, 50.0)
         self.assertEqual(points[0].mean, 25.0)
+        self.assertEqual(points[0].n, 5)
         unfiltered = msd_summary(bundle, "A", filter_sparse_tail=False)
         self.assertEqual(unfiltered[1].lag, 100.0)
         self.assertEqual(unfiltered[1].mean, 100.0)
@@ -266,6 +267,52 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(points[0].mean, 12.0)
         self.assertIsNone(points[0].ci_low)
         self.assertIsNone(points[0].ci_high)
+
+    def test_msd_summary_averages_tracks_within_each_dataset_first(self):
+        from celltrack.analysis.compute import GroupedTrack, MsdSeries, RawTrack, msd_summary
+
+        def track(dataset, track_id):
+            return GroupedTrack("A", RawTrack(
+                dataset, track_id, tuple(range(1, 11)), tuple(range(10)), tuple(range(10)),
+                (), (), (), (), (), (), (), (), (), (),
+            ))
+
+        tracks = (track("one", 1), track("one", 2), track("two", 3))
+        series = (
+            MsdSeries("A", "one", 1, (1.0,), (10.0,), None),
+            MsdSeries("A", "one", 2, (1.0,), (30.0,), None),
+            MsdSeries("A", "two", 3, (1.0,), (100.0,), None),
+        )
+        bundle = analysis.AnalysisBundle(
+            ("A",), tracks, (), series, 0, AnalysisParameters(figure_types=["msd_summary"]),
+        )
+        points = msd_summary(bundle, "A")
+        self.assertEqual(points[0].mean, 60.0)
+        self.assertEqual(points[0].n, 2)
+
+    def test_turning_angle_distribution_weights_datasets_equally(self):
+        from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack, turning_angle_distribution
+
+        def track(dataset, track_id, turning):
+            return GroupedTrack("A", RawTrack(
+                dataset, track_id, tuple(range(50)), tuple(range(50)), tuple(range(50)),
+                (), (), (), (), tuple(turning), (), (), (), (), (),
+            ))
+
+        tracks = (
+            track("short", 1, [5.0]),
+            track("long", 2, [175.0] * 100),
+        )
+        bundle = AnalysisBundle(
+            ("A",), tracks, (), (), 0,
+            AnalysisParameters(figure_types=["turning_angle_distribution"]),
+        )
+        points = turning_angle_distribution(bundle, "A")
+        self.assertEqual(len(points), 18)
+        self.assertEqual(points[0].angle_degrees, 5.0)
+        self.assertAlmostEqual(points[0].mean_density, 0.05)
+        self.assertAlmostEqual(points[-1].mean_density, 0.05)
+        self.assertEqual(points[0].n, 2)
 
     def test_bundle_trajectory_and_polar_scales_are_shared(self):
         from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack, TrackSummary
@@ -320,7 +367,7 @@ class AnalysisTests(unittest.TestCase):
             artifact_id = manifest["id"]
             payload = analysis_payload(store.read(artifact_id))
             self.assertEqual(payload["result_url"], f"/analysis/{artifact_id}")
-            self.assertEqual(manifest["schema_version"], 3)
+            self.assertEqual(manifest["schema_version"], 4)
             self.assertIn("statistics_url", payload)
             self.assertEqual(store.list()[0]["id"], artifact_id)
             self.assertTrue(store.data_file(artifact_id, "archive_file").is_file())
@@ -369,9 +416,9 @@ class AnalysisTests(unittest.TestCase):
     def test_statistical_results_and_csv_include_pairwise_adjustment_and_effects(self):
         from celltrack.analysis.compute import AnalysisBundle, TrackSummary, statistical_results, statistics_to_csv
 
-        def summary(group, track_id, value):
+        def summary(group, dataset, track_id, value):
             return TrackSummary(
-                group, "sample", track_id, 50, 1, 50, value, value, value, value,
+                group, dataset, track_id, 50, 1, 50, value, value, value, value,
                 value, value, value, value, value, value, value, "Mixed", 0.0,
             )
 
@@ -380,13 +427,14 @@ class AnalysisTests(unittest.TestCase):
             figure_types=["parameter_distributions"],
         )
         summaries = tuple(
-            summary(group, index, offset + index)
+            summary(group, f"{group}-{index}", index, offset + index)
             for group, offset in (("A", 0), ("B", 20), ("C", 40))
             for index in range(1, 7)
         )
         bundle = AnalysisBundle(("A", "B", "C"), (), summaries, (), 0, parameters)
         results = statistical_results(bundle)
         self.assertEqual(results[0].test, "Kruskal-Wallis")
+        self.assertEqual(results[0].unit, "dataset_mean")
         self.assertEqual(results[0].group_1, "A|B|C")
         self.assertEqual(results[0].effect_size_type, "epsilon-squared")
         pairwise = [result for result in results if result.test == "Mann-Whitney U"]
@@ -395,9 +443,37 @@ class AnalysisTests(unittest.TestCase):
         self.assertTrue(all(result.effect_size_type == "rank-biserial correlation" for result in pairwise))
         parsed = list(csv.DictReader(io.StringIO(statistics_to_csv(bundle).decode("utf-8-sig"))))
         self.assertEqual(list(parsed[0]), [
-            "metric", "test", "group_1", "group_2", "n_1", "n_2", "statistic",
+            "metric", "test", "unit", "group_1", "group_2", "n_1", "n_2", "statistic",
             "p_value", "p_adjusted", "effect_size", "effect_size_type",
         ])
+
+    def test_statistics_do_not_treat_tracks_as_independent_replicates(self):
+        from celltrack.analysis.compute import AnalysisBundle, TrackSummary, statistical_results
+
+        def summary(group, track_id, value):
+            return TrackSummary(
+                group, f"{group}-dataset", track_id, 50, 1, 50, value, value, value, value,
+                value, value, value, value, value, value, value, "Mixed", 0.0,
+            )
+
+        summaries = tuple(
+            summary(group, track_id, offset + track_id)
+            for group, offset in (("A", 0), ("B", 100))
+            for track_id in range(1, 21)
+        )
+        parameters = AnalysisParameters(summary_metrics=["mean_speed"], figure_types=["parameter_distributions"])
+        result = statistical_results(AnalysisBundle(("A", "B"), (), summaries, (), 0, parameters))[0]
+        self.assertEqual((result.n_1, result.n_2), (1, 1))
+        self.assertIsNone(result.p_value)
+
+    def test_analysis_rejects_a_dataset_in_multiple_groups(self):
+        from celltrack.analysis.service import create_analysis
+
+        with self.assertRaisesRegex(ValueError, "Each dataset can belong to only one comparison group"):
+            create_analysis(
+                [("A", ["duplicate"]), ("B", ["duplicate"])],
+                AnalysisParameters(figure_types=["cell_appearance"]),
+            )
 
 
 class TrackingIntegrationTests(unittest.TestCase):

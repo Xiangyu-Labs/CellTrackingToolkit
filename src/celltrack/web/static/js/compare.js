@@ -29,7 +29,10 @@ export function initializeCompare(options) {
 
 export function visibleGroupDatasets() {
   const query = state.groupQuery.trim().toLowerCase();
-  return (state.overview?.datasets || []).filter(dataset => dataset.tracking.completed && `${dataset.name} ${dataset.relative_path}`.toLowerCase().includes(query));
+  const selectedByOtherGroups = new Set(state.groups.flatMap((group, index) => index === state.activeGroup ? [] : [...group.ids]));
+  return (state.overview?.datasets || []).filter(dataset => dataset.tracking.completed
+    && !selectedByOtherGroups.has(dataset.id)
+    && `${dataset.name} ${dataset.relative_path}`.toLowerCase().includes(query));
 }
 
 export function groupsAreValid() {
@@ -62,10 +65,12 @@ export function renderCompare() {
 
   const query = state.groupQuery.trim().toLowerCase();
   const datasets = (state.overview?.datasets || []).filter(dataset => dataset.tracking.completed);
+  const selectedByOtherGroups = new Set(state.groups.flatMap((group, index) => index === state.activeGroup ? [] : [...group.ids]));
   const list = document.querySelector("#groupDatasetList");
   list.innerHTML = datasets.length ? datasets.map(dataset => {
     const searchText = `${dataset.name} ${dataset.relative_path}`.toLowerCase();
-    return `<label class="group-dataset-option" data-search="${escapeHtml(searchText)}" ${searchText.includes(query) ? "" : "hidden"}><input type="checkbox" data-id="${dataset.id}" ${active.ids.has(dataset.id) ? "checked" : ""}><span><strong>${escapeHtml(dataset.name)}</strong><small>${escapeHtml(dataset.group_path || "Datasets")}</small></span></label>`;
+    const unavailable = selectedByOtherGroups.has(dataset.id);
+    return `<label class="group-dataset-option" data-search="${escapeHtml(searchText)}" ${searchText.includes(query) ? "" : "hidden"}><input type="checkbox" data-id="${dataset.id}" ${active.ids.has(dataset.id) ? "checked" : ""} ${unavailable ? "disabled" : ""}><span><strong>${escapeHtml(dataset.name)}</strong><small>${escapeHtml(dataset.group_path || "Datasets")}</small></span></label>`;
   }).join("") : `<div class="empty-state">${formatText("empty")}</div>`;
   list.querySelectorAll("input").forEach(input => input.addEventListener("change", () => { input.checked ? active.ids.add(input.dataset.id) : active.ids.delete(input.dataset.id); renderCompare(); }));
 
@@ -109,7 +114,9 @@ export function updateCompareValidation() {
   const selectionsValid = parameters.figure_types.length > 0
     && (!(figures.has("temporal_long") || figures.has("temporal_all")) || parameters.temporal_metrics.length > 0)
     && (!figures.has("parameter_distributions") || parameters.summary_metrics.length > 0);
-  const valid = groupsAreValid() && numericValid && selectionsValid;
+  const selectedIds = state.groups.flatMap(group => [...group.ids]);
+  const datasetsUnique = selectedIds.length === new Set(selectedIds).size;
+  const valid = groupsAreValid() && datasetsUnique && numericValid && selectionsValid;
   const button = document.querySelector("#analyzeButton");
   button.disabled = !valid;
   button.setAttribute("aria-busy", "false");

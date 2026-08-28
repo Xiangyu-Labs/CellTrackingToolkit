@@ -77,6 +77,10 @@ def port_is_available(port: int) -> bool:
     return True
 
 
+def browser_url(port: int) -> str:
+    return f"http://{HOST}:{port}/?app_version={__version__}"
+
+
 def select_port() -> tuple[int, bool]:
     for port in PORTS:
         if is_celltrack_service(port):
@@ -162,7 +166,7 @@ def run_application(*, no_browser: bool = False) -> int:
         print(f"Cell Tracking Studio is already running: {url}")
         LOGGER.info("Using existing Cell Tracking Studio service at %s", url)
         if not no_browser:
-            webbrowser.open(url)
+            webbrowser.open(browser_url(port))
         return 0
 
     server_log_path = LOG_DIR / "server.log"
@@ -213,7 +217,7 @@ def run_application(*, no_browser: bool = False) -> int:
         print("Close this terminal window to stop the application.")
         LOGGER.info("Server is healthy at %s", url)
         if not no_browser:
-            webbrowser.open(url)
+            webbrowser.open(browser_url(port))
         exit_code = process.wait()
         return 0 if exit_code < 0 else exit_code
     finally:

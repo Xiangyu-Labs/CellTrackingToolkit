@@ -4,6 +4,10 @@ from pathlib import Path
 import re
 import unittest
 
+from fastapi.testclient import TestClient
+
+from celltrack.web.app import app
+
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "src" / "celltrack" / "web" / "static"
@@ -61,6 +65,28 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("results/${viewer.kind}/frames/${viewer.index}/download", app)
         self.assertIn("results/${kind}/download", app)
         self.assertIn('$("#downloadCurrentFrame").removeAttribute("href")', app)
+
+
+class WebCacheTests(unittest.TestCase):
+    def test_pages_and_static_assets_are_not_cached(self):
+        client = TestClient(app)
+
+        for path in (
+            "/",
+            "/analysis/tasks/pending",
+            "/static/js/app.js?v=15",
+            "/static/css/layout.css?v=7",
+        ):
+            with self.subTest(path=path):
+                response = client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_api_responses_keep_their_own_cache_policy(self):
+        response = TestClient(app).get("/api/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("cache-control", response.headers)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from celltrack import __version__
@@ -18,6 +19,18 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(datasets.router)
 app.include_router(jobs.router)
 app.include_router(analysis.router)
+
+
+@app.middleware("http")
+async def prevent_web_asset_caching(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith(("/analysis/", "/static/")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/health")

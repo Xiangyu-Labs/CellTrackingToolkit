@@ -68,6 +68,12 @@ class LauncherPortTests(unittest.TestCase):
         with mock.patch.object(launcher, "PORTS", range(port, port + 1)):
             self.assertEqual(launcher.select_port(), (port, True))
 
+    def test_browser_url_changes_with_application_version(self):
+        self.assertEqual(
+            launcher.browser_url(8000),
+            f"http://127.0.0.1:8000/?app_version={launcher.__version__}",
+        )
+
     def test_foreign_service_is_skipped_for_next_free_port(self):
         server = self._server({"status": "ok", "app": "another-program"})
         occupied_port = server.server_address[1]

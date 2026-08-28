@@ -53,17 +53,25 @@
   .app-shell { display: block; }
   .sidebar, .sidebar.collapsed { position: sticky; z-index: 50; width: 100%; height: auto; min-height: 64px; display: grid; grid-template-columns: minmax(0, 1fr); padding: 8px; border-right: 0; border-bottom: 1px solid var(--border); }
   .sidebar-head { display: none; }
-  .stage-nav { min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; gap: 4px; }
+  .stage-nav { min-width: 0; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; gap: 4px; }
   .stage-button { min-width: 0; min-height: 46px; grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .stage-button > span { display: none; }
   .stage-button strong { display: block; font-size: 11px; }
-  .main-content { padding: 18px 10px 116px; }
+  .main-content { padding: 18px 10px 168px; }
   .toolbar { align-items: stretch; flex-wrap: wrap; }
   .search-field { flex-basis: 100%; min-width: 0; }
+  .filter-menu { width: 100%; }
+  .filter-menu > summary { width: fit-content; }
+  .filter-popover { left: 0; right: auto; width: min(280px, calc(100vw - 20px)); }
   .dataset-header { display: none; }
   .dataset-row { grid-template-columns: 32px minmax(0, 1fr); min-height: 112px; }
   .dataset-row .image-count, .dataset-row .status-stack { grid-column: 2; margin-left: 60px; }
   .action-bar, .app-shell:has(.sidebar.collapsed) .action-bar { left: 10px; right: 10px; bottom: 10px; }
+  .action-bar { align-items: stretch; flex-direction: column; gap: 6px; padding: 8px; }
+  .action-bar p { min-height: 20px; display: flex; align-items: center; }
+  .process-actions { width: 100%; }
+  .process-actions .button { flex: 1; padding-inline: 10px; }
+  .job-item { align-items: stretch; flex-direction: column; }
   .parameter-grid, .option-grid { grid-template-columns: 1fr; }
   input, button { font-size: 16px; }
 }

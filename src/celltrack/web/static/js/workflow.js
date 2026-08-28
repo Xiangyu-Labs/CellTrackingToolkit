@@ -1,5 +1,5 @@
-import { state, escapeHtml } from "./state.js?v=3";
-import { formatText } from "./strings.js?v=1";
+import { state, escapeHtml } from "./state.js?v=4";
+import { formatText } from "./strings.js?v=3";
 
 let openViewer = () => {};
 
@@ -9,13 +9,31 @@ function activeJob(datasetId, kind) {
   return state.jobs.find(job => job.kind === kind && job.dataset_ids.includes(datasetId) && !["completed", "cancelled"].includes(job.status) && !job.completed_dataset_ids.includes(datasetId));
 }
 
-function processState(dataset, kind = state.tab) {
+function processState(dataset, kind) {
   const job = activeJob(dataset.id, kind);
   if (job?.status === "failed") return "failed";
   if (job?.status === "cancelling") return "cancelling";
   if (job?.status === "running" && job.current_dataset_id === dataset.id) return "processing";
   if (job) return "queued";
   return dataset[kind].completed ? "completed" : "idle";
+}
+
+function workflowStage(dataset) {
+  if (dataset.tracking.completed) return "tracked";
+  if (dataset.segmentation.completed) return "segmented-not-tracked";
+  return "not-segmented";
+}
+
+function taskStates(dataset) {
+  const states = new Set(["idle"]);
+  for (const kind of ["segmentation", "tracking"]) {
+    const status = processState(dataset, kind);
+    if (["queued", "processing", "failed", "cancelling"].includes(status)) {
+      states.delete("idle");
+      states.add(status);
+    }
+  }
+  return states;
 }
 
 export function badge(dataset, kind) {
@@ -36,22 +54,56 @@ export function filteredDatasets() {
   if (!state.overview) return [];
   const query = state.query.trim().toLowerCase();
   return state.overview.datasets.filter(dataset => {
-    const matchesText = `${dataset.name} ${dataset.relative_path}`.toLowerCase().includes(query);
-    return matchesText && (state.filter === "all" || processState(dataset) === state.filter);
+    const matchesText = `${dataset.name} ${dataset.group_path || ""} ${dataset.relative_path}`.toLowerCase().includes(query);
+    const matchesStage = !state.filters.stages.size || state.filters.stages.has(workflowStage(dataset));
+    const statuses = taskStates(dataset);
+    const matchesTask = !state.filters.tasks.size || [...state.filters.tasks].some(status => statuses.has(status));
+    return matchesText && matchesStage && matchesTask;
   });
+}
+
+const filterGroups = {
+  stages: [["not-segmented", "notSegmented"], ["segmented-not-tracked", "segmentedNotTracked"], ["tracked", "tracked"]],
+  tasks: [["idle", "idle"], ["queued", "waiting"], ["processing", "processing"], ["failed", "failed"], ["cancelling", "cancelling"]],
+};
+
+function filterLabel(group, value) {
+  const option = filterGroups[group].find(([key]) => key === value);
+  return formatText(option?.[1] || value);
+}
+
+function trackingUnavailableText(count) {
+  return formatText(count === 1 ? "trackingNeedsSegmentationOne" : "trackingNeedsSegmentation", { count });
+}
+
+function renderFilters() {
+  const menu = document.querySelector("#filterMenu");
+  const wasOpen = menu.open;
+  for (const [group, options] of Object.entries(filterGroups)) {
+    const root = document.querySelector(group === "stages" ? "#stageFilters" : "#taskFilters");
+    root.innerHTML = options.map(([value, key]) => `<label><input type="checkbox" data-filter-group="${group}" value="${value}" ${state.filters[group].has(value) ? "checked" : ""}><span>${formatText(key)}</span></label>`).join("");
+  }
+  menu.querySelectorAll("input").forEach(input => input.addEventListener("change", () => {
+    input.checked ? state.filters[input.dataset.filterGroup].add(input.value) : state.filters[input.dataset.filterGroup].delete(input.value);
+    renderWorkflow();
+  }));
+
+  const enabled = [...state.filters.stages].map(value => ["stages", value]).concat([...state.filters.tasks].map(value => ["tasks", value]));
+  const count = document.querySelector("#filterCount");
+  count.textContent = enabled.length;
+  count.hidden = !enabled.length;
+  const active = document.querySelector("#activeFilters");
+  active.hidden = !enabled.length;
+  active.innerHTML = enabled.map(([group, value]) => `<button class="filter-chip" type="button" data-filter-group="${group}" data-filter-value="${value}"><span>${filterLabel(group, value)}</span><i data-lucide="x"></i></button>`).join("") + (enabled.length ? `<button id="clearFilters" class="text-button" type="button">${formatText("clearAll")}</button>` : "");
+  active.querySelectorAll(".filter-chip").forEach(button => button.addEventListener("click", () => { state.filters[button.dataset.filterGroup].delete(button.dataset.filterValue); renderWorkflow(); }));
+  active.querySelector("#clearFilters")?.addEventListener("click", () => { state.filters.stages.clear(); state.filters.tasks.clear(); renderWorkflow(); });
+  menu.open = wasOpen;
 }
 
 export function renderWorkflow() {
   if (!state.overview || state.tab === "compare") return;
-  const tracking = state.tab === "tracking";
-  document.querySelector("#stageTitle").textContent = formatText(tracking ? "tracking" : "segmentation");
-  const filters = [
-    ["all", "all"], ["idle", tracking ? "idleTrack" : "idleSeg"], ["queued", "queued"],
-    ["processing", tracking ? "processingTrack" : "processingSeg"], ["completed", tracking ? "completedTrack" : "completedSeg"], ["failed", "failed"], ["cancelling", "cancelling"]
-  ];
-  const filterRoot = document.querySelector("#statusFilters");
-  filterRoot.innerHTML = filters.map(([value, key]) => `<button type="button" data-filter="${value}" class="${state.filter === value ? "active" : ""}" aria-pressed="${state.filter === value}">${formatText(key)}</button>`).join("");
-  filterRoot.querySelectorAll("button").forEach(button => button.addEventListener("click", () => { state.filter = button.dataset.filter; renderWorkflow(); }));
+  document.querySelector("#stageTitle").textContent = formatText("process");
+  renderFilters();
 
   const datasets = filteredDatasets();
   document.querySelector("#datasetList").innerHTML = datasets.map(dataset => `<div class="dataset-row ${state.selected.has(dataset.id) ? "selected" : ""}">
@@ -62,8 +114,14 @@ export function renderWorkflow() {
   document.querySelectorAll(".dataset-check").forEach(input => input.addEventListener("change", () => { input.checked ? state.selected.add(input.dataset.id) : state.selected.delete(input.dataset.id); renderWorkflow(); }));
   document.querySelectorAll(".result-badge").forEach(button => button.addEventListener("click", () => openViewer(button.dataset.id, button.dataset.kind)));
   document.querySelector("#selectedCount").textContent = state.selected.size;
-  document.querySelector("#runButton").disabled = state.selected.size === 0;
-  document.querySelector("#runButton span").textContent = formatText(tracking ? "runTrack" : "runSeg");
-  document.querySelector("#actionHint").textContent = state.selected.size ? formatText("runCount", { count: state.selected.size }) : formatText("choose");
+  const selected = state.overview.datasets.filter(dataset => state.selected.has(dataset.id));
+  const unavailable = selected.filter(dataset => !dataset.segmentation.completed);
+  document.querySelector("#runSegmentation").disabled = !selected.length;
+  const trackingButton = document.querySelector("#runTracking");
+  trackingButton.disabled = !selected.length || unavailable.length > 0;
+  trackingButton.title = unavailable.length ? trackingUnavailableText(unavailable.length) : "";
+  document.querySelector("#actionHint").textContent = !selected.length ? formatText("choose")
+    : unavailable.length ? trackingUnavailableText(unavailable.length)
+    : formatText("selectedCount", { count: selected.length });
   window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
 }

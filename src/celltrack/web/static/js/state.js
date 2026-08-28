@@ -1,8 +1,8 @@
-const allowedTabs = new Set(["segmentation", "tracking", "compare"]);
+const allowedTabs = new Set(["process", "compare"]);
 const requestedTab = new URL(location.href).searchParams.get("tab");
 
 export const state = {
-  tab: allowedTabs.has(requestedTab) ? requestedTab : "segmentation",
+  tab: allowedTabs.has(requestedTab) ? requestedTab : "process",
   sidebarCollapsed: localStorage.getItem("celltrack-sidebar-collapsed") === "true",
   overview: null,
   jobs: [],
@@ -10,7 +10,10 @@ export const state = {
   history: [],
   selected: new Set(),
   query: "",
-  filter: "all",
+  filters: {
+    stages: new Set(),
+    tasks: new Set(),
+  },
   groups: [],
   activeGroup: 0,
   groupQuery: "",

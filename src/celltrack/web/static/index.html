@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cell Tracking Studio</title>
   <link rel="stylesheet" href="/static/css/tokens.css?v=3">
-  <link rel="stylesheet" href="/static/css/components.css?v=5">
-  <link rel="stylesheet" href="/static/css/layout.css?v=3">
+  <link rel="stylesheet" href="/static/css/components.css?v=6">
+  <link rel="stylesheet" href="/static/css/layout.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -18,19 +18,25 @@
         <button class="icon-button" id="sidebarToggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar"><i data-lucide="panel-left-close"></i></button>
       </div>
       <nav class="stage-nav" aria-label="Workflow">
-        <button class="stage-button" type="button" data-tab="segmentation"><span>1</span><strong>Segmentation</strong></button>
-        <button class="stage-button" type="button" data-tab="tracking"><span>2</span><strong>Tracking</strong></button>
-        <button class="stage-button" type="button" data-tab="compare"><span>3</span><strong>Compare</strong></button>
+        <button class="stage-button" type="button" data-tab="process"><span>1</span><strong>Process</strong></button>
+        <button class="stage-button" type="button" data-tab="compare"><span>2</span><strong>Compare</strong></button>
       </nav>
     </aside>
 
     <main id="main" class="main-content" tabindex="-1">
       <section id="workflowView">
-        <header class="page-header"><h1 id="stageTitle"></h1></header>
+        <header class="page-header"><h1 id="stageTitle">Process</h1></header>
         <div class="toolbar">
           <label class="search-field"><i data-lucide="search"></i><span class="sr-only">Search datasets</span><input id="datasetSearch" type="search" placeholder="Search datasets"></label>
-          <div id="statusFilters" class="segmented-control" aria-label="Status filters"></div>
+          <details id="filterMenu" class="filter-menu">
+            <summary class="button secondary"><i data-lucide="list-filter"></i><span>Filter</span><span id="filterCount" class="filter-count" hidden>0</span></summary>
+            <div class="filter-popover" aria-label="Dataset filters">
+              <fieldset><legend>Process stage</legend><div id="stageFilters" class="filter-options"></div></fieldset>
+              <fieldset><legend>Task status</legend><div id="taskFilters" class="filter-options"></div></fieldset>
+            </div>
+          </details>
         </div>
+        <div id="activeFilters" class="active-filters" aria-label="Active filters" hidden></div>
         <div class="selection-toolbar">
           <span><strong id="selectedCount">0</strong> <span>selected</span></span>
           <button class="text-button" id="selectVisible" type="button">Select visible</button>
@@ -44,7 +50,10 @@
         <div id="jobBar" class="job-bar" hidden></div>
         <div class="action-bar">
           <p id="actionHint"></p>
-          <button class="button primary" id="runButton" type="button" disabled><i data-lucide="play"></i><span></span></button>
+          <div class="process-actions">
+            <button class="button secondary" id="runSegmentation" type="button" disabled><i data-lucide="scan-line"></i><span>Run segmentation</span></button>
+            <button class="button primary" id="runTracking" type="button" disabled><i data-lucide="play"></i><span>Run tracking</span></button>
+          </div>
         </div>
       </section>
 
@@ -87,6 +96,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script type="module" src="/static/js/app.js?v=10"></script>
+  <script type="module" src="/static/js/app.js?v=13"></script>
 </body>
 </html>

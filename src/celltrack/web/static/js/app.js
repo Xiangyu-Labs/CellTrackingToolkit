@@ -1,7 +1,7 @@
 import { api } from "./api.js?v=2";
-import { formatText } from "./strings.js?v=1";
-import { state, escapeHtml, setTabInUrl } from "./state.js?v=3";
-import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=6";
+import { formatText } from "./strings.js?v=3";
+import { state, escapeHtml, setTabInUrl } from "./state.js?v=4";
+import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=9";
 import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=8";
 
 const $ = selector => document.querySelector(selector);
@@ -18,7 +18,6 @@ function toast(message) {
 function showTab(tab, updateUrl = true) {
   state.tab = tab;
   state.selected.clear();
-  state.filter = "all";
   $("#workflowView").hidden = tab === "compare";
   $("#compareView").hidden = tab !== "compare";
   document.querySelectorAll(".stage-button").forEach(button => {
@@ -46,10 +45,10 @@ async function pollJobs() {
 }
 
 function renderJobs() {
-  const active = state.jobs.filter(job => ["queued", "running", "cancelling"].includes(job.status) && (state.tab === "compare" || job.kind === state.tab));
+  const active = state.jobs.filter(job => ["queued", "running", "cancelling"].includes(job.status));
   const root = $("#jobBar");
   root.hidden = !active.length || state.tab === "compare";
-  root.innerHTML = active.map(job => `<div class="job-item"><span><strong>${escapeHtml(job.current_dataset || formatText("queued"))}</strong> | ${job.progress}/${job.total}</span><button class="button secondary cancel-batch" data-id="${job.id}" type="button"><i data-lucide="square"></i>${formatText("cancelBatch")}</button></div>`).join("");
+  root.innerHTML = active.map(job => `<div class="job-item"><span>${formatText("jobProgress", { kind: formatText(job.kind), dataset: `<strong>${escapeHtml(job.current_dataset || formatText("queued"))}</strong>`, progress: job.progress, total: job.total })}</span><button class="button secondary cancel-batch" data-id="${job.id}" type="button"><i data-lucide="square"></i>${formatText("cancelBatch")}</button></div>`).join("");
   root.querySelectorAll(".cancel-batch").forEach(button => button.addEventListener("click", async () => {
     if (!confirm(formatText("confirmCancel"))) return;
     button.disabled = true;
@@ -64,17 +63,17 @@ async function loadOverview(quiet = false) {
   catch (error) { if (!quiet) toast(error.message); }
 }
 
-async function startJob() {
+async function startJob(kind) {
   const ids = [...state.selected];
   if (!ids.length) return;
-  if (state.tab === "tracking") {
+  if (kind === "tracking") {
     const unavailable = state.overview.datasets.filter(dataset => ids.includes(dataset.id) && !dataset.segmentation.completed);
-    if (unavailable.length) { toast(`${unavailable.length} datasets need segmentation`); return; }
+    if (unavailable.length) { toast(formatText(unavailable.length === 1 ? "trackingNeedsSegmentationOne" : "trackingNeedsSegmentation", { count: unavailable.length })); return; }
   }
-  $("#runButton").disabled = true;
+  $(kind === "tracking" ? "#runTracking" : "#runSegmentation").disabled = true;
   try {
-    const force = state.overview.datasets.some(dataset => ids.includes(dataset.id) && dataset[state.tab].completed);
-    await api(`/api/jobs/${state.tab}`, { method: "POST", body: JSON.stringify({ dataset_ids: ids, force }) });
+    const force = state.overview.datasets.some(dataset => ids.includes(dataset.id) && dataset[kind].completed);
+    await api(`/api/jobs/${kind}`, { method: "POST", body: JSON.stringify({ dataset_ids: ids, force }) });
     state.selected.clear();
     await loadJobs();
   } catch (error) { toast(error.message); renderWorkflow(); }
@@ -170,7 +169,8 @@ function bindEvents() {
   $("#datasetSearch").addEventListener("input", event => { state.query = event.target.value; renderWorkflow(); });
   $("#selectVisible").addEventListener("click", () => { filteredDatasets().forEach(dataset => state.selected.add(dataset.id)); renderWorkflow(); });
   $("#clearVisible").addEventListener("click", () => { filteredDatasets().forEach(dataset => state.selected.delete(dataset.id)); renderWorkflow(); });
-  $("#runButton").addEventListener("click", startJob);
+  $("#runSegmentation").addEventListener("click", () => startJob("segmentation"));
+  $("#runTracking").addEventListener("click", () => startJob("tracking"));
   $("#addGroup").addEventListener("click", () => { if (!addGroup()) toast(formatText("groupLimit")); });
   $("#removeGroup").addEventListener("click", removeActiveGroup);
   $("#groupSearch").addEventListener("input", event => {
@@ -186,7 +186,8 @@ function bindEvents() {
   $("#nextFrame").addEventListener("click", () => loadFrame(state.viewer.index + 1));
   $("#frameSlider").addEventListener("input", event => loadFrame(event.target.value));
   $("#resultDialog").addEventListener("close", () => { state.viewer = null; $("#resultImage").removeAttribute("src"); });
-  addEventListener("popstate", () => { const tab = new URL(location.href).searchParams.get("tab"); showTab(["segmentation", "tracking", "compare"].includes(tab) ? tab : "segmentation", false); });
+  addEventListener("click", event => { if (!event.target.closest("#filterMenu")) $("#filterMenu").open = false; });
+  addEventListener("popstate", () => { const tab = new URL(location.href).searchParams.get("tab"); showTab(["process", "compare"].includes(tab) ? tab : "process", false); });
 }
 
 async function init() {

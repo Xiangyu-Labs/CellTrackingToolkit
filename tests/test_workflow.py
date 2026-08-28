@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -91,6 +92,21 @@ class JobProgressTests(unittest.TestCase):
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_paper_focused_analysis_defaults(self):
+        parameters = AnalysisParameters()
+        self.assertEqual(parameters.figure_types, [
+            "cell_appearance", "temporal_long", "classification",
+            "turning_angle_distribution", "msd_long", "representatives",
+            "group_trajectories", "parameter_distributions",
+        ])
+        self.assertEqual(parameters.summary_metrics, [
+            "total_path_length", "net_displacement", "mean_speed", "directionality",
+            "mean_turning_angle", "mean_area", "mean_perimeter", "mean_roundness",
+            "mean_shape_change_rate",
+        ])
+        self.assertNotIn("turning_angle_std", parameters.summary_metrics)
+        self.assertEqual(len(parameters.temporal_metrics), 10)
+
     def test_analysis_task_runs_in_background_and_exposes_result(self):
         started = threading.Event()
         release = threading.Event()
@@ -164,6 +180,68 @@ class AnalysisTests(unittest.TestCase):
             self.assertAlmostEqual(summaries[0].directionality, 1.0)
             self.assertAlmostEqual(summaries[0].mean_area, 4.0)
 
+    def test_directionality_handles_straight_returning_and_stationary_tracks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            csv_path = Path(temporary) / "tracking.csv"
+            csv_path.write_text(
+                "track_id,timeframe,x,y,polygon\n"
+                "1,1,0,0,\n1,4,3,0,\n1,10,6,0,\n"
+                "2,1,0,0,\n2,2,4,0,\n2,8,0,0,\n"
+                "3,1,2,2,\n3,3,2,2,\n3,9,2,2,\n",
+                encoding="utf-8",
+            )
+            bundle = analysis.prepare_analysis([("A", [("sample", csv_path)])])
+            by_id = {item.track_id: item for item in bundle.summaries_for("A", False)}
+            self.assertEqual(by_id[1].directionality, 1.0)
+            self.assertEqual(by_id[2].directionality, 0.0)
+            self.assertEqual(by_id[3].directionality, 0.0)
+            self.assertTrue(math.isnan(by_id[2].final_angle))
+            self.assertTrue(math.isnan(by_id[3].final_angle))
+            raw = {track.raw.track_id: track.raw for track in bundle.tracks}
+            self.assertTrue(math.isnan(raw[1].directionality[0]))
+            self.assertTrue(all(math.isnan(value) for value in raw[3].directionality))
+
+    def test_default_parameter_grid_uses_nine_metrics(self):
+        from unittest.mock import patch
+        from celltrack.analysis.compute import AnalysisBundle
+
+        bundle = AnalysisBundle(("A", "B"), (), (), (), 0, AnalysisParameters())
+        with patch.object(figures, "_plot_metric_distribution") as plot_metric, patch.object(figures, "_png", return_value=b"png"):
+            self.assertEqual(figures.figure_parameter_distributions(bundle), b"png")
+        metrics = [call.args[2] for call in plot_metric.call_args_list]
+        self.assertEqual(len(metrics), 9)
+        self.assertNotIn("turning_angle_std", metrics)
+        figures.plt.close("all")
+
+    def test_parameter_grid_rejects_turning_variability_as_the_only_metric(self):
+        with self.assertRaisesRegex(ValidationError, "other than turning_angle_std"):
+            AnalysisParameters(
+                summary_metrics=["turning_angle_std"],
+                figure_types=["parameter_distributions"],
+            )
+
+    def test_composite_figures_follow_selected_dependencies(self):
+        from unittest.mock import patch
+        from celltrack.analysis.compute import AnalysisBundle
+
+        parameters = AnalysisParameters(figure_types=["cell_appearance", "classification"])
+        bundle = AnalysisBundle(("A", "B"), (), (), (), 0, parameters)
+        with patch.object(figures, "figure_cell_appearance", return_value=b"png"), \
+             patch.object(figures, "figure_classification", return_value=b"png"), \
+             patch.object(figures, "figure_paper_cell_and_classification", return_value=b"paper"):
+            rendered = figures.render_all_figures(bundle)
+        self.assertIn("paper_01_cell_and_classification.png", rendered)
+        self.assertNotIn("paper_02_temporal_and_parameters.png", rendered)
+        self.assertNotIn("paper_03_group_trajectories.png", rendered)
+
+    def test_analysis_png_canvas_is_white(self):
+        from PIL import Image
+        from celltrack.analysis.compute import AnalysisBundle
+
+        bundle = AnalysisBundle(("A", "B"), (), (), (), 0, AnalysisParameters(figure_types=["cell_appearance"]))
+        image = Image.open(io.BytesIO(figures.figure_cell_appearance(bundle))).convert("RGB")
+        self.assertEqual(image.getpixel((0, 0)), (255, 255, 255))
+
     def test_shared_bundle_renders_configured_figures_for_every_group(self):
         with tempfile.TemporaryDirectory() as temporary:
             csv_path = Path(temporary) / "tracking.csv"
@@ -182,9 +260,11 @@ class AnalysisTests(unittest.TestCase):
             ], parameters)
             self.assertEqual(bundle.source_files_read, 1)
             rendered = figures.render_all_figures(bundle)
-            self.assertEqual(len(rendered), 5)
+            self.assertEqual(len(rendered), 7)
             self.assertEqual(sum("representatives" in name for name in rendered), 2)
-            self.assertEqual(sum("trajectories" in name for name in rendered), 2)
+            self.assertEqual(sum(name.startswith("figure_") and "_trajectories" in name for name in rendered), 2)
+            self.assertIn("paper_03_group_trajectories.png", rendered)
+            self.assertIn("supplementary_01_representative_trajectories.png", rendered)
             self.assertTrue(all(content.startswith(b"\x89PNG\r\n\x1a\n") for content in rendered.values()))
 
     def test_new_distribution_and_msd_summary_figures_render(self):
@@ -211,6 +291,18 @@ class AnalysisTests(unittest.TestCase):
                 "figure_02_msd_summary.png",
             ])
             self.assertTrue(all(content.startswith(b"\x89PNG\r\n\x1a\n") for content in rendered.values()))
+
+    def test_non_default_all_track_figures_remain_available(self):
+        from celltrack.analysis.compute import AnalysisBundle
+
+        parameters = AnalysisParameters(figure_types=["temporal_all", "msd_all", "msd_summary"])
+        bundle = AnalysisBundle(("A", "B"), (), (), (), 0, parameters)
+        rendered = figures.render_all_figures(bundle)
+        self.assertEqual(list(rendered), [
+            "figure_01_msd_summary.png",
+            "figure_02_temporal_all.png",
+            "figure_03_msd_all.png",
+        ])
 
     def test_msd_summary_applies_calibration_and_sparse_tail_filter(self):
         from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, MsdSeries, RawTrack, msd_summary
@@ -326,9 +418,9 @@ class AnalysisTests(unittest.TestCase):
                 (), (), (), (), (), (), (), (), (), (),
             )
 
-        def summary(group, dataset, track_id, angle):
+        def summary(group, dataset, track_id, angle, displacement=1.0):
             return analysis.TrackSummary(
-                group, dataset, track_id, 50, 1, 50, 1, 1, 1, 1, 1, 1,
+                group, dataset, track_id, 50, 1, 50, 1, 1, displacement, 1, 1, 1,
                 1, 1, 1, 1, 1, "Directed", angle,
             )
 
@@ -338,12 +430,16 @@ class AnalysisTests(unittest.TestCase):
         )
         summaries = (
             summary("A", "a", 1, 0.0),
+            summary("A", "stationary", 3, 0.0, displacement=0.0),
             summary("B", "b", 2, 0.0),
         )
         bundle = AnalysisBundle(("A", "B"), tracks, summaries, (), 0, parameters)
         self.assertAlmostEqual(figures._bundle_trajectory_limit(bundle), 324.0)
         _edges, radial_limit = figures._angle_histogram_scale(bundle)
-        self.assertAlmostEqual(radial_limit, 1.05)
+        self.assertAlmostEqual(radial_limit, 105.0)
+        percentages = figures._angle_histogram_percentages(bundle, "A", _edges)
+        self.assertAlmostEqual(float(percentages.sum()), 100.0)
+        self.assertAlmostEqual(float(percentages.max()), 100.0)
 
     def test_long_track_filter_uses_at_least_fifty_observations(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -466,6 +562,17 @@ class AnalysisTests(unittest.TestCase):
         result = statistical_results(AnalysisBundle(("A", "B"), (), summaries, (), 0, parameters))[0]
         self.assertEqual((result.n_1, result.n_2), (1, 1))
         self.assertIsNone(result.p_value)
+
+    def test_turning_variability_remains_in_statistics_csv(self):
+        from celltrack.analysis.compute import AnalysisBundle, statistics_to_csv
+
+        parameters = AnalysisParameters(
+            summary_metrics=["mean_speed"],
+            figure_types=["cell_appearance"],
+        )
+        bundle = AnalysisBundle(("A", "B"), (), (), (), 0, parameters)
+        rows = list(csv.DictReader(io.StringIO(statistics_to_csv(bundle).decode("utf-8-sig"))))
+        self.assertEqual({row["metric"] for row in rows}, {"mean_speed", "turning_angle_std"})
 
     def test_analysis_rejects_a_dataset_in_multiple_groups(self):
         from celltrack.analysis.service import create_analysis

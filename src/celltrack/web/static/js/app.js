@@ -2,7 +2,7 @@ import { api } from "./api.js?v=2";
 import { formatText } from "./strings.js?v=5";
 import { state, escapeHtml, setTabInUrl } from "./state.js?v=5";
 import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=10";
-import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=9";
+import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=10";
 
 const $ = selector => document.querySelector(selector);
 const icons = () => window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });

@@ -16,7 +16,7 @@ import numpy as np
 from scipy import stats
 
 
-from celltrack.analysis.models import AnalysisParameters, DEFAULT_ANALYSIS_PARAMETERS
+from celltrack.analysis.models import AnalysisParameters, DEFAULT_ANALYSIS_PARAMETERS, SUMMARY_METRICS
 
 
 @dataclass(frozen=True)
@@ -198,7 +198,8 @@ def _load_raw_tracks(csv_path: Path, dataset: str) -> tuple[RawTrack, ...]:
             speed[1:] = step[1:] / frame_delta
         path = np.cumsum(step)
         net = np.hypot(x - x[0], y - y[0])
-        directionality = np.divide(net, path, out=np.zeros_like(net), where=path > 0)
+        directionality = np.divide(net, path, out=np.full_like(net, np.nan), where=path > 0)
+        directionality = np.clip(directionality, 0.0, 1.0)
 
         turning = np.full(len(x), np.nan, dtype=float)
         for index in range(2, len(x)):
@@ -252,9 +253,9 @@ def _summarize(track: GroupedTrack, parameters: AnalysisParameters) -> TrackSumm
     frame_span = max(1, raw.timeframe[-1] - raw.timeframe[0])
     total_path = sum(raw.step_distance)
     net = raw.net_displacement[-1]
-    directionality = net / total_path if total_path else 0.0
+    directionality = float(np.clip(net / total_path, 0.0, 1.0)) if total_path else 0.0
     turning = [value for value in raw.turning_angle if math.isfinite(value)]
-    final_angle = math.atan2(raw.y[-1] - raw.y[0], raw.x[-1] - raw.x[0])
+    final_angle = math.atan2(raw.y[-1] - raw.y[0], raw.x[-1] - raw.x[0]) if net > 0 else math.nan
     return TrackSummary(
         group=track.group,
         dataset=raw.dataset,
@@ -446,10 +447,17 @@ def _holm_adjust(p_values: list[float]) -> list[float]:
     return adjusted
 
 
-def statistical_results(bundle: AnalysisBundle) -> tuple[StatisticalResult, ...]:
+def statistical_results(
+    bundle: AnalysisBundle,
+    metrics: list[str] | tuple[str, ...] | None = None,
+) -> tuple[StatisticalResult, ...]:
     """Calculate the non-parametric tests used by figures and CSV exports."""
     results: list[StatisticalResult] = []
-    for metric in bundle.parameters.summary_metrics:
+    selected_metrics = tuple(metrics) if metrics is not None else tuple(bundle.parameters.summary_metrics)
+    unknown = set(selected_metrics) - set(SUMMARY_METRICS)
+    if unknown:
+        raise ValueError(f"Unknown statistical metrics: {', '.join(sorted(unknown))}")
+    for metric in selected_metrics:
         values = {
             group: [value for _dataset, value in dataset_metric_values(bundle, group, metric)]
             for group in bundle.groups
@@ -525,6 +533,12 @@ def statistics_to_csv(bundle: AnalysisBundle) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(fields)
-    for result in statistical_results(bundle):
+    metrics = list(bundle.parameters.summary_metrics)
+    if "turning_angle_std" not in metrics:
+        metrics.append("turning_angle_std")
+    if "classification" in bundle.parameters.figure_types:
+        if "directionality" not in metrics:
+            metrics.append("directionality")
+    for result in statistical_results(bundle, metrics):
         writer.writerow([getattr(result, field) for field in fields])
     return buffer.getvalue().encode("utf-8-sig")

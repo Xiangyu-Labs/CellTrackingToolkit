@@ -47,11 +47,11 @@ class FrontendContractTests(unittest.TestCase):
         for asset in (
             "/static/css/components.css?v=7",
             "/static/css/layout.css?v=7",
-            "/static/js/app.js?v=15",
+            "/static/js/app.js?v=16",
         ):
             self.assertIn(asset, index)
         self.assertIn('"./workflow.js?v=10"', app)
-        self.assertIn('"./compare.js?v=9"', app)
+        self.assertIn('"./compare.js?v=10"', app)
         self.assertIn('"./strings.js?v=5"', app)
 
     def test_result_viewer_has_download_links_and_updates_frame_url(self):
@@ -66,6 +66,13 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("results/${kind}/download", app)
         self.assertIn('$("#downloadCurrentFrame").removeAttribute("href")', app)
 
+    def test_parameter_distributions_require_a_main_grid_metric(self):
+        compare = self.read_static("js/compare.js")
+        self.assertIn(
+            'parameters.summary_metrics.some(metric => metric !== "turning_angle_std")',
+            compare,
+        )
+
 
 class WebCacheTests(unittest.TestCase):
     def test_pages_and_static_assets_are_not_cached(self):
@@ -74,7 +81,7 @@ class WebCacheTests(unittest.TestCase):
         for path in (
             "/",
             "/analysis/tasks/pending",
-            "/static/js/app.js?v=15",
+            "/static/js/app.js?v=16",
             "/static/css/layout.css?v=7",
         ):
             with self.subTest(path=path):

@@ -113,7 +113,8 @@ export function updateCompareValidation() {
     && optionalCalibrationFields.every(([key]) => parameters[key] === null || (Number.isFinite(parameters[key]) && parameters[key] > 0));
   const selectionsValid = parameters.figure_types.length > 0
     && (!(figures.has("temporal_long") || figures.has("temporal_all")) || parameters.temporal_metrics.length > 0)
-    && (!figures.has("parameter_distributions") || parameters.summary_metrics.length > 0);
+    && (!figures.has("parameter_distributions")
+      || parameters.summary_metrics.some(metric => metric !== "turning_angle_std"));
   const selectedIds = state.groups.flatMap(group => [...group.ids]);
   const datasetsUnique = selectedIds.length === new Set(selectedIds).size;
   const valid = groupsAreValid() && datasetsUnique && numericValid && selectionsValid;

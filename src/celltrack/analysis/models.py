@@ -29,6 +29,18 @@ SUMMARY_METRICS = {
     "mean_shape_change_rate": "Shape change rate",
 }
 
+DEFAULT_SUMMARY_METRICS = (
+    "total_path_length",
+    "net_displacement",
+    "mean_speed",
+    "directionality",
+    "mean_turning_angle",
+    "mean_area",
+    "mean_perimeter",
+    "mean_roundness",
+    "mean_shape_change_rate",
+)
+
 FIGURE_TYPES = {
     "cell_appearance": "Cell appearance",
     "temporal_long": "Temporal trends (long tracks)",
@@ -42,6 +54,17 @@ FIGURE_TYPES = {
     "group_trajectories": "Trajectory analysis for each group",
     "parameter_distributions": "Parameter distributions",
 }
+
+DEFAULT_FIGURE_TYPES = (
+    "cell_appearance",
+    "temporal_long",
+    "classification",
+    "turning_angle_distribution",
+    "msd_long",
+    "representatives",
+    "group_trajectories",
+    "parameter_distributions",
+)
 
 
 class AnalysisParameters(BaseModel):
@@ -57,8 +80,8 @@ class AnalysisParameters(BaseModel):
     frame_interval_minutes: float | None = Field(default=None, gt=0)
     microns_per_pixel: float | None = Field(default=None, gt=0)
     temporal_metrics: list[str] = Field(default_factory=lambda: list(TEMPORAL_METRICS))
-    summary_metrics: list[str] = Field(default_factory=lambda: list(SUMMARY_METRICS))
-    figure_types: list[str] = Field(default_factory=lambda: list(FIGURE_TYPES))
+    summary_metrics: list[str] = Field(default_factory=lambda: list(DEFAULT_SUMMARY_METRICS))
+    figure_types: list[str] = Field(default_factory=lambda: list(DEFAULT_FIGURE_TYPES))
 
     @model_validator(mode="after")
     def validate_combinations(self) -> "AnalysisParameters":
@@ -71,8 +94,12 @@ class AnalysisParameters(BaseModel):
         self._validate_selection("figure_types", self.figure_types, FIGURE_TYPES, allow_empty=False)
         if ({"temporal_long", "temporal_all"} & set(self.figure_types)) and not self.temporal_metrics:
             raise ValueError("temporal metrics are required for temporal figures")
-        if "parameter_distributions" in self.figure_types and not self.summary_metrics:
-            raise ValueError("summary metrics are required for parameter distributions")
+        if "parameter_distributions" in self.figure_types and not (
+            set(self.summary_metrics) - {"turning_angle_std"}
+        ):
+            raise ValueError(
+                "at least one parameter-distribution metric other than turning_angle_std is required"
+            )
         return self
 
     @staticmethod

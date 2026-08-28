@@ -84,6 +84,15 @@ Application updates do not replace or delete `Datasets/`, `models/`, or
 
 ## Analysis methods
 
+The default export is the paper-focused set: cell appearance, long-track
+temporal trends, trajectory classification, step turning-angle distribution,
+long-track MSD, representative trajectories, group trajectory analysis, and a
+3 x 3 grid of dataset-level parameter distributions. All-track temporal and
+MSD figures and the standalone MSD summary remain available as optional
+figures. New analyses also include paper-ready composite PNGs whenever their
+component figures are selected; existing results in `workspace/analysis/` are
+left unchanged.
+
 Each dataset is treated as one independent experimental replicate. Tracks
 within a dataset are technical observations: track-level metrics are averaged
 within each dataset before group-level inference, and each dataset receives
@@ -94,6 +103,13 @@ three or more groups use a Kruskal-Wallis test plus pairwise two-sided
 Mann-Whitney U tests. Pairwise p-values are Holm-adjusted within each metric.
 The statistics export includes rank-biserial correlation or epsilon-squared
 effect sizes and reports sample sizes as dataset counts.
+
+Directionality is the first-to-last displacement divided by total path length
+and is bounded to `[0, 1]`. A fully stationary track has summary directionality
+`0.0`; temporal samples before any movement have no defined directionality and
+are excluded from temporal means. Final displacement angle plots report each
+bin as a percentage of valid tracks in that group, with one shared radial scale
+across groups.
 
 MSD is averaged first across tracks within each dataset and then across
 datasets. Curves show a two-sided 95% Student-t confidence interval and stop

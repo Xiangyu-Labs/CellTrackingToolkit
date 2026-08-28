@@ -19,7 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = []
+test = [
+  "httpx2>=2,<3",
+]
 
 [project.scripts]
 celltrack = "celltrack.cli:main"

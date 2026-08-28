@@ -5,27 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cell Tracking Studio</title>
   <link rel="stylesheet" href="/static/css/tokens.css?v=3">
-  <link rel="stylesheet" href="/static/css/components.css?v=6">
-  <link rel="stylesheet" href="/static/css/layout.css?v=5">
+  <link rel="stylesheet" href="/static/css/components.css?v=7">
+  <link rel="stylesheet" href="/static/css/layout.css?v=6">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-head">
-        <span class="brand-mark" aria-hidden="true"></span>
-        <strong class="brand-text">Cell Tracking Studio</strong>
-        <button class="icon-button" id="sidebarToggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar"><i data-lucide="panel-left-close"></i></button>
-      </div>
-      <nav class="stage-nav" aria-label="Workflow">
-        <button class="stage-button" type="button" data-tab="process"><span>1</span><strong>Process</strong></button>
-        <button class="stage-button" type="button" data-tab="compare"><span>2</span><strong>Compare</strong></button>
-      </nav>
-    </aside>
+    <nav class="top-tabs" aria-label="Workflow">
+      <button class="top-tab" type="button" data-tab="process">Process</button>
+      <button class="top-tab" type="button" data-tab="analysis">Analysis</button>
+    </nav>
 
     <main id="main" class="main-content" tabindex="-1">
       <section id="workflowView">
-        <header class="page-header"><h1 id="stageTitle">Process</h1></header>
+        <h1 class="sr-only">Process</h1>
         <div class="toolbar">
           <label class="search-field"><i data-lucide="search"></i><span class="sr-only">Search datasets</span><input id="datasetSearch" type="search" placeholder="Search datasets"></label>
           <details id="filterMenu" class="filter-menu">
@@ -58,11 +51,11 @@
       </section>
 
       <section id="compareView" hidden>
-        <header class="page-header">
-          <h1>Compare</h1>
+        <h1 class="sr-only">Analysis</h1>
+        <div class="group-toolbar">
+          <div id="groupTabs" class="group-tabs" role="tablist"></div>
           <button class="button secondary" id="addGroup" type="button"><i data-lucide="plus"></i><span>Add group</span></button>
-        </header>
-        <div id="groupTabs" class="group-tabs" role="tablist"></div>
+        </div>
         <div class="group-editor">
           <label><span>Group name</span><input id="groupName" maxlength="40"></label>
           <button class="icon-button danger" id="removeGroup" type="button" aria-label="Remove group" title="Remove group"><i data-lucide="trash-2"></i></button>
@@ -75,7 +68,7 @@
         <div id="groupDatasetList" class="group-dataset-list"></div>
 
         <details class="parameter-panel" open>
-          <summary>Compare parameters</summary>
+          <summary>Analysis parameters</summary>
           <div id="numericParameters" class="parameter-grid"></div>
           <label class="switch-row"><input id="fallbackTracks" type="checkbox"><span>Use all tracks when no long tracks qualify</span></label>
           <fieldset><legend>Figures</legend><div id="figureOptions" class="option-grid"></div></fieldset>
@@ -83,7 +76,7 @@
           <fieldset><legend>Summary metrics</legend><div id="summaryOptions" class="option-grid"></div></fieldset>
         </details>
 
-        <div class="action-bar compare-action"><p id="compareHint" role="status" aria-live="polite"></p><button class="button primary" id="analyzeButton" type="button" aria-busy="false" disabled><i data-lucide="chart-no-axes-combined"></i><span>Generate comparison</span></button></div>
+        <div class="action-bar compare-action"><p id="compareHint" role="status" aria-live="polite"></p><button class="button primary" id="analyzeButton" type="button" aria-busy="false" disabled><i data-lucide="chart-no-axes-combined"></i><span>Generate analysis</span></button></div>
         <section class="history" aria-labelledby="historyTitle"><h2 id="historyTitle">Analysis history</h2><div id="historyList"></div></section>
       </section>
     </main>
@@ -96,6 +89,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script type="module" src="/static/js/app.js?v=13"></script>
+  <script type="module" src="/static/js/app.js?v=14"></script>
 </body>
 </html>

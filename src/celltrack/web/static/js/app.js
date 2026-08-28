@@ -1,8 +1,8 @@
 import { api } from "./api.js?v=2";
-import { formatText } from "./strings.js?v=3";
-import { state, escapeHtml, setTabInUrl } from "./state.js?v=4";
-import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=9";
-import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=8";
+import { formatText } from "./strings.js?v=4";
+import { state, escapeHtml, setTabInUrl } from "./state.js?v=5";
+import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=10";
+import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=9";
 
 const $ = selector => document.querySelector(selector);
 const icons = () => window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
@@ -18,15 +18,15 @@ function toast(message) {
 function showTab(tab, updateUrl = true) {
   state.tab = tab;
   state.selected.clear();
-  $("#workflowView").hidden = tab === "compare";
-  $("#compareView").hidden = tab !== "compare";
-  document.querySelectorAll(".stage-button").forEach(button => {
+  $("#workflowView").hidden = tab === "analysis";
+  $("#compareView").hidden = tab !== "analysis";
+  document.querySelectorAll(".top-tab").forEach(button => {
     const active = button.dataset.tab === tab;
     button.classList.toggle("active", active);
     active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
   });
   if (updateUrl) setTabInUrl(tab);
-  if (tab === "compare") { renderCompare(); loadHistory(); } else renderWorkflow();
+  if (tab === "analysis") { renderCompare(); loadHistory(); } else renderWorkflow();
   icons();
 }
 
@@ -47,7 +47,7 @@ async function pollJobs() {
 function renderJobs() {
   const active = state.jobs.filter(job => ["queued", "running", "cancelling"].includes(job.status));
   const root = $("#jobBar");
-  root.hidden = !active.length || state.tab === "compare";
+  root.hidden = !active.length || state.tab === "analysis";
   root.innerHTML = active.map(job => `<div class="job-item"><span>${formatText("jobProgress", { kind: formatText(job.kind), dataset: `<strong>${escapeHtml(job.current_dataset || formatText("queued"))}</strong>`, progress: job.progress, total: job.total })}</span><button class="button secondary cancel-batch" data-id="${job.id}" type="button"><i data-lucide="square"></i>${formatText("cancelBatch")}</button></div>`).join("");
   root.querySelectorAll(".cancel-batch").forEach(button => button.addEventListener("click", async () => {
     if (!confirm(formatText("confirmCancel"))) return;
@@ -119,7 +119,7 @@ async function createComparison() {
     refreshHistoryWhenComplete(task.id);
   } catch (error) {
     taskWindow?.close();
-    toast(error.message || formatText("comparisonFailed"));
+    toast(error.message || formatText("analysisFailed"));
   }
 }
 
@@ -133,9 +133,9 @@ async function refreshHistoryWhenComplete(taskId) {
       }
     } while (["queued", "running"].includes(task.status));
     if (task.status === "completed") await loadHistory();
-    else toast(task.error || formatText("comparisonFailed"));
+    else toast(task.error || formatText("analysisFailed"));
   } catch (error) {
-    toast(error.message || formatText("comparisonFailed"));
+    toast(error.message || formatText("analysisFailed"));
   }
 }
 
@@ -164,8 +164,7 @@ function renderHistory() {
 }
 
 function bindEvents() {
-  document.querySelectorAll(".stage-button").forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
-  $("#sidebarToggle").addEventListener("click", () => { state.sidebarCollapsed = !state.sidebarCollapsed; $("#sidebar").classList.toggle("collapsed", state.sidebarCollapsed); localStorage.setItem("celltrack-sidebar-collapsed", state.sidebarCollapsed); });
+  document.querySelectorAll(".top-tab").forEach(button => button.addEventListener("click", () => showTab(button.dataset.tab)));
   $("#datasetSearch").addEventListener("input", event => { state.query = event.target.value; renderWorkflow(); });
   $("#selectVisible").addEventListener("click", () => { filteredDatasets().forEach(dataset => state.selected.add(dataset.id)); renderWorkflow(); });
   $("#clearVisible").addEventListener("click", () => { filteredDatasets().forEach(dataset => state.selected.delete(dataset.id)); renderWorkflow(); });
@@ -187,13 +186,17 @@ function bindEvents() {
   $("#frameSlider").addEventListener("input", event => loadFrame(event.target.value));
   $("#resultDialog").addEventListener("close", () => { state.viewer = null; $("#resultImage").removeAttribute("src"); });
   addEventListener("click", event => { if (!event.target.closest("#filterMenu")) $("#filterMenu").open = false; });
-  addEventListener("popstate", () => { const tab = new URL(location.href).searchParams.get("tab"); showTab(["process", "compare"].includes(tab) ? tab : "process", false); });
+  addEventListener("popstate", () => {
+    const requestedTab = new URL(location.href).searchParams.get("tab");
+    const tab = ["process", "analysis"].includes(requestedTab) ? requestedTab : "process";
+    showTab(tab, false);
+    if (tab !== requestedTab) setTabInUrl(tab, true);
+  });
 }
 
 async function init() {
   bindEvents();
   configureWorkflow({ openViewer });
-  $("#sidebar").classList.toggle("collapsed", state.sidebarCollapsed);
   try {
     const [overview, options, jobs, history] = await Promise.all([api("/api/overview"), api("/api/analysis/options"), api("/api/jobs"), api("/api/analysis")]);
     state.overview = overview; state.jobs = jobs; state.history = history; initializeCompare(options);

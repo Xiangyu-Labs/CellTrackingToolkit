@@ -1,9 +1,8 @@
-const allowedTabs = new Set(["process", "compare"]);
+const allowedTabs = new Set(["process", "analysis"]);
 const requestedTab = new URL(location.href).searchParams.get("tab");
 
 export const state = {
   tab: allowedTabs.has(requestedTab) ? requestedTab : "process",
-  sidebarCollapsed: localStorage.getItem("celltrack-sidebar-collapsed") === "true",
   overview: null,
   jobs: [],
   analysisOptions: null,

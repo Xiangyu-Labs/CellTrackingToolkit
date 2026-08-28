@@ -8,10 +8,11 @@
 .button.primary:hover { background: var(--primary-dark); }
 .button.secondary { background: var(--surface); border-color: var(--border-strong); color: var(--ink); }
 .text-button { min-height: 44px; border: 0; background: transparent; color: var(--primary-dark); font-weight: 600; }
-.stage-button { width: 100%; min-height: 56px; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 8px 10px; border: 0; border-radius: var(--radius); background: transparent; color: var(--ink); text-align: left; }
-.stage-button > span { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 50%; }
-.stage-button.active { background: var(--surface); color: var(--primary-dark); box-shadow: 0 2px 8px rgba(21,48,43,.06); }
-.stage-button.active > span { background: var(--primary); border-color: var(--primary); color: white; }
+.top-tab { position: relative; width: 112px; height: 56px; padding: 0; border: 0; background: transparent; color: var(--muted); font-weight: 650; }
+.top-tab::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: transparent; }
+.top-tab:hover { color: var(--ink); }
+.top-tab.active { color: var(--primary-dark); }
+.top-tab.active::after { background: var(--primary); }
 .search-field { min-height: 46px; display: flex; align-items: center; gap: 9px; padding: 0 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .search-field:focus-within { border-color: var(--focus); }
 .search-field svg { width: 19px; color: var(--muted); }
@@ -75,3 +76,6 @@ legend { padding: 0 6px; font-size: 13px; font-weight: 650; }
 .empty-state { padding: 32px; text-align: center; color: var(--muted); }
 .toast { position: fixed; z-index: 1000; left: 50%; bottom: 100px; max-width: min(520px, calc(100vw - 24px)); transform: translate(-50%, 20px); padding: 11px 14px; border-radius: var(--radius); background: var(--ink); color: white; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 620px) {
+  .top-tab { width: 50%; }
+}

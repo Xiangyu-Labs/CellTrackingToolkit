@@ -1,5 +1,5 @@
-import { state, escapeHtml } from "./state.js?v=4";
-import { formatText } from "./strings.js?v=3";
+import { state, escapeHtml } from "./state.js?v=5";
+import { formatText } from "./strings.js?v=4";
 
 let openViewer = () => {};
 
@@ -101,8 +101,7 @@ function renderFilters() {
 }
 
 export function renderWorkflow() {
-  if (!state.overview || state.tab === "compare") return;
-  document.querySelector("#stageTitle").textContent = formatText("process");
+  if (!state.overview || state.tab === "analysis") return;
   renderFilters();
 
   const datasets = filteredDatasets();

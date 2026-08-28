@@ -1,6 +1,6 @@
 import { api } from "./api.js?v=2";
-import { escapeHtml } from "./state.js?v=2";
-import { formatText } from "./strings.js?v=1";
+import { escapeHtml } from "./state.js?v=5";
+import { formatText } from "./strings.js?v=4";
 
 function formatParameters(parameters) {
   parameters = parameters || {};
@@ -55,7 +55,7 @@ async function monitorTask(taskId) {
       return;
     }
     if (task.status === "failed") throw new Error(task.error || formatText("resultFailed"));
-    setLoading(task.status === "queued" ? formatText("comparisonQueued") : formatText("comparisonRunning"));
+    setLoading(task.status === "queued" ? formatText("analysisQueued") : formatText("analysisRunning"));
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 }

@@ -1,5 +1,5 @@
-import { state, escapeHtml } from "./state.js?v=3";
-import { formatText } from "./strings.js?v=1";
+import { state, escapeHtml } from "./state.js?v=5";
+import { formatText } from "./strings.js?v=4";
 
 const numericFields = [
   ["long_track_min_observations", "Long-track observations", 1],
@@ -50,7 +50,7 @@ function checkboxOptions(rootId, catalog, selected, parameterKey) {
 }
 
 export function renderCompare() {
-  if (!state.overview || !state.analysisOptions || state.tab !== "compare") return;
+  if (!state.overview || !state.analysisOptions || state.tab !== "analysis") return;
   state.activeGroup = Math.min(state.activeGroup, state.groups.length - 1);
   const active = state.groups[state.activeGroup];
   const tabs = document.querySelector("#groupTabs");

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 import zipfile
 from pydantic import ValidationError
 
@@ -538,6 +539,178 @@ class ResultVisualizationTests(unittest.TestCase):
             self.assertEqual(tracking[:2], b"\xff\xd8")
             self.assertGreater(len(segmentation), 1000)
             self.assertGreater(len(tracking), 1000)
+
+
+class ResultExportTests(unittest.TestCase):
+    def make_dataset(self, base: Path):
+        from types import SimpleNamespace
+        from PIL import Image
+
+        labels = base / "labels"
+        labels.mkdir()
+        images = []
+        for name in ("frame-2.png", "frame-10.png"):
+            image_path = base / name
+            Image.new("RGB", (100, 80), "white").save(image_path)
+            images.append(image_path)
+        labels.joinpath("frame-2.txt").write_text(
+            "0 0.2 0.2 0.4 0.2 0.4 0.4 0.2 0.4\n", encoding="utf-8",
+        )
+        labels.joinpath("frame-10.txt").write_text("", encoding="utf-8")
+        tracking_csv = base / "tracking_results.csv"
+        tracking_csv.write_text(
+            "track_id,timeframe,x,y,polygon\n"
+            '1,1,30,24,"[(20, 16), (40, 16), (40, 32), (20, 32)]"\n'
+            '1,2,34,26,"[(24, 18), (44, 18), (44, 34), (24, 34)]"\n',
+            encoding="utf-8",
+        )
+        return SimpleNamespace(
+            id="dataset123", name="sample", images=tuple(images),
+            labels_dir=labels, tracking_csv=tracking_csv,
+        )
+
+    def test_segmentation_archive_contains_jpegs_and_all_labels(self):
+        from celltrack.web.result_exports import create_result_archive
+
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset = self.make_dataset(Path(temporary))
+            archive_path = create_result_archive(dataset, "segmentation")
+            try:
+                with zipfile.ZipFile(archive_path) as archive:
+                    self.assertEqual(set(archive.namelist()), {
+                        "images/0001_frame-2_segmentation.jpg",
+                        "images/0002_frame-10_segmentation.jpg",
+                        "data/labels/frame-2.txt",
+                        "data/labels/frame-10.txt",
+                    })
+                    self.assertTrue(archive.read("images/0001_frame-2_segmentation.jpg").startswith(b"\xff\xd8"))
+                    self.assertEqual(archive.read("data/labels/frame-10.txt"), b"")
+            finally:
+                archive_path.unlink(missing_ok=True)
+
+    def test_tracking_archive_reads_records_once_and_preserves_csv(self):
+        from celltrack.web import visualization
+        from celltrack.web.result_exports import create_result_archive
+
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset = self.make_dataset(Path(temporary))
+            original_csv = dataset.tracking_csv.read_bytes()
+            with patch.object(
+                visualization, "_tracking_records", wraps=visualization._tracking_records,
+            ) as reader:
+                archive_path = create_result_archive(dataset, "tracking")
+            try:
+                self.assertEqual(reader.call_count, 1)
+                with zipfile.ZipFile(archive_path) as archive:
+                    self.assertEqual(set(archive.namelist()), {
+                        "images/0001_frame-2_tracking.jpg",
+                        "images/0002_frame-10_tracking.jpg",
+                        "data/tracking_results.csv",
+                    })
+                    self.assertTrue(archive.read("images/0002_frame-10_tracking.jpg").startswith(b"\xff\xd8"))
+                    self.assertEqual(archive.read("data/tracking_results.csv"), original_csv)
+            finally:
+                archive_path.unlink(missing_ok=True)
+
+    def test_failed_archive_is_removed(self):
+        from celltrack.web import result_exports
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            dataset = self.make_dataset(base)
+            dataset.labels_dir.joinpath("frame-2.txt").write_text(
+                "0 invalid 0.2 0.4 0.2 0.4 0.4\n", encoding="utf-8",
+            )
+            named_temporary_file = tempfile.NamedTemporaryFile
+
+            def local_archive(**kwargs):
+                return named_temporary_file(dir=base, **kwargs)
+
+            with patch.object(result_exports.tempfile, "NamedTemporaryFile", local_archive):
+                with self.assertRaises(result_exports.ResultDataError):
+                    result_exports.create_result_archive(dataset, "segmentation")
+            self.assertEqual(list(base.glob("*.zip")), [])
+
+            with (
+                patch.object(result_exports.tempfile, "NamedTemporaryFile", local_archive),
+                patch.object(result_exports.zipfile, "ZipFile", side_effect=OSError("disk full")),
+            ):
+                with self.assertRaisesRegex(OSError, "disk full"):
+                    result_exports.create_result_archive(dataset, "tracking")
+            self.assertEqual(list(base.glob("*.zip")), [])
+
+    def test_download_endpoints_return_files_and_expected_errors(self):
+        from fastapi.testclient import TestClient
+        from celltrack.web.app import app
+        from celltrack.web.routes import datasets as routes
+
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset = self.make_dataset(Path(temporary))
+            client = TestClient(app)
+            with (
+                patch.object(routes, "_dataset", return_value=dataset),
+                patch.object(routes, "segmentation_complete", return_value=True),
+                patch.object(routes, "tracking_complete", return_value=True),
+            ):
+                frame = client.get(
+                    "/api/datasets/dataset123/results/segmentation/frames/1/download",
+                )
+                self.assertEqual(frame.status_code, 200)
+                self.assertEqual(frame.headers["content-type"], "image/jpeg")
+                self.assertIn("dataset123-0001-segmentation.jpg", frame.headers["content-disposition"])
+
+                archive = client.get("/api/datasets/dataset123/results/tracking/download")
+                self.assertEqual(archive.status_code, 200)
+                self.assertEqual(archive.headers["content-type"], "application/zip")
+                self.assertIn("dataset123-tracking-results.zip", archive.headers["content-disposition"])
+                with zipfile.ZipFile(io.BytesIO(archive.content)) as result_zip:
+                    self.assertIn("data/tracking_results.csv", result_zip.namelist())
+
+                invalid_frame = client.get(
+                    "/api/datasets/dataset123/results/segmentation/frames/3/download",
+                )
+                self.assertEqual(invalid_frame.status_code, 400)
+                self.assertEqual(invalid_frame.json()["detail"], "Frame must be between 1 and 2")
+
+                unknown_kind = client.get("/api/datasets/dataset123/results/unknown/download")
+                self.assertEqual(unknown_kind.status_code, 404)
+
+            with (
+                patch.object(routes, "_dataset", return_value=dataset),
+                patch.object(routes, "segmentation_complete", return_value=False),
+            ):
+                incomplete = client.get("/api/datasets/dataset123/results/segmentation/download")
+                self.assertEqual(incomplete.status_code, 409)
+                self.assertEqual(incomplete.json()["detail"], "Segmentation is not complete")
+
+            with patch.object(routes, "_dataset", side_effect=routes.HTTPException(404, "missing")):
+                missing = client.get("/api/datasets/missing/results/tracking/download")
+                self.assertEqual(missing.status_code, 404)
+
+    def test_corrupt_result_data_is_400_and_archive_failure_is_500(self):
+        from fastapi.testclient import TestClient
+        from celltrack.web.app import app
+        from celltrack.web.routes import datasets as routes
+
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset = self.make_dataset(Path(temporary))
+            client = TestClient(app)
+            dataset.tracking_csv.write_text("bad,columns\n1,2\n", encoding="utf-8")
+            with (
+                patch.object(routes, "_dataset", return_value=dataset),
+                patch.object(routes, "tracking_complete", return_value=True),
+            ):
+                corrupt = client.get("/api/datasets/dataset123/results/tracking/download")
+                self.assertEqual(corrupt.status_code, 400)
+
+            with (
+                patch.object(routes, "_dataset", return_value=dataset),
+                patch.object(routes, "tracking_complete", return_value=True),
+                patch.object(routes, "create_result_archive", side_effect=RuntimeError("zip failed")),
+            ):
+                failed = client.get("/api/datasets/dataset123/results/tracking/download")
+                self.assertEqual(failed.status_code, 500)
+                self.assertEqual(failed.json()["detail"], "Could not create result archive")
 
 
 if __name__ == "__main__":

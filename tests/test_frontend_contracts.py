@@ -42,12 +42,25 @@ class FrontendContractTests(unittest.TestCase):
 
         for asset in (
             "/static/css/components.css?v=7",
-            "/static/css/layout.css?v=6",
-            "/static/js/app.js?v=14",
+            "/static/css/layout.css?v=7",
+            "/static/js/app.js?v=15",
         ):
             self.assertIn(asset, index)
         self.assertIn('"./workflow.js?v=10"', app)
         self.assertIn('"./compare.js?v=9"', app)
+        self.assertIn('"./strings.js?v=5"', app)
+
+    def test_result_viewer_has_download_links_and_updates_frame_url(self):
+        index = self.read_static("index.html")
+        app = self.read_static("js/app.js")
+
+        self.assertIn('id="downloadCurrentFrame"', index)
+        self.assertIn('id="downloadAllResults"', index)
+        self.assertIn('aria-label="Download current frame"', index)
+        self.assertIn('aria-label="Download all results"', index)
+        self.assertIn("results/${viewer.kind}/frames/${viewer.index}/download", app)
+        self.assertIn("results/${kind}/download", app)
+        self.assertIn('$("#downloadCurrentFrame").removeAttribute("href")', app)
 
 
 if __name__ == "__main__":

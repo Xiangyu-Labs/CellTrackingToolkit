@@ -4,6 +4,7 @@ import ast
 import csv
 import io
 from pathlib import Path
+from typing import Iterator
 
 from PIL import Image, ImageDraw
 
@@ -69,9 +70,12 @@ def render_segmentation(dataset: Dataset, frame_index: int) -> bytes:
     return _jpeg(composed)
 
 
-def _tracking_records(path: Path) -> list[dict[str, object]]:
-    with path.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
+def _tracking_records(path: Path, content: bytes | None = None) -> list[dict[str, object]]:
+    if content is None:
+        with path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+    else:
+        rows = list(csv.DictReader(io.StringIO(content.decode("utf-8"), newline="")))
     records: list[dict[str, object]] = []
     for row in rows:
         records.append({
@@ -84,13 +88,17 @@ def _tracking_records(path: Path) -> list[dict[str, object]]:
     return records
 
 
-def render_tracking(dataset: Dataset, frame_index: int) -> bytes:
+def _render_tracking(
+    dataset: Dataset,
+    frame_index: int,
+    tracking_records: list[dict[str, object]],
+) -> bytes:
     image_path = _frame(dataset, frame_index)
     image = Image.open(image_path).convert("RGBA")
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay, "RGBA")
     grouped: dict[int, list[dict[str, object]]] = {}
-    for record in _tracking_records(dataset.tracking_csv):
+    for record in tracking_records:
         if int(record["timeframe"]) <= frame_index:
             grouped.setdefault(int(record["track_id"]), []).append(record)
 
@@ -116,3 +124,23 @@ def render_tracking(dataset: Dataset, frame_index: int) -> bytes:
     _header(composed, f"Frame {frame_index}/{len(dataset.images)}  |  {len(grouped)} tracks  |  {active} active")
     image.close()
     return _jpeg(composed)
+
+
+def render_tracking(dataset: Dataset, frame_index: int) -> bytes:
+    return _render_tracking(dataset, frame_index, _tracking_records(dataset.tracking_csv))
+
+
+def iter_rendered_frames(
+    dataset: Dataset,
+    kind: str,
+    tracking_csv: bytes | None = None,
+) -> Iterator[tuple[str, bytes]]:
+    if kind not in {"segmentation", "tracking"}:
+        raise ValueError(f"Unknown result type: {kind}")
+    tracking_records = _tracking_records(dataset.tracking_csv, tracking_csv) if kind == "tracking" else None
+    for frame_index, image_path in enumerate(dataset.images, start=1):
+        if kind == "segmentation":
+            content = render_segmentation(dataset, frame_index)
+        else:
+            content = _render_tracking(dataset, frame_index, tracking_records or [])
+        yield f"{frame_index:04d}_{image_path.stem}_{kind}.jpg", content

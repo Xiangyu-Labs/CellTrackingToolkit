@@ -64,6 +64,8 @@ export const TEXT = Object.freeze({
   loading: "Generating preview",
   segResult: "Segmentation result",
   trackResult: "Tracking result",
+  downloadCurrentFrame: "Download current frame",
+  downloadAllResults: "Download all results",
   requestFailed: "Request failed",
   groupLimit: "A maximum of 6 groups is supported",
   deleteFailed: "Delete failed",

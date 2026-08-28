@@ -1,5 +1,5 @@
 import { api } from "./api.js?v=2";
-import { formatText } from "./strings.js?v=4";
+import { formatText } from "./strings.js?v=5";
 import { state, escapeHtml, setTabInUrl } from "./state.js?v=5";
 import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=10";
 import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=9";
@@ -85,6 +85,7 @@ function openViewer(datasetId, kind) {
   state.viewer = { datasetId, kind, index: 1, total: dataset.image_count, name: dataset.name };
   $("#resultKind").textContent = formatText(kind === "segmentation" ? "segResult" : "trackResult");
   $("#resultTitle").textContent = dataset.name;
+  $("#downloadAllResults").href = `/api/datasets/${datasetId}/results/${kind}/download`;
   $("#frameSlider").max = dataset.image_count;
   $("#resultDialog").showModal();
   loadFrame(1);
@@ -98,6 +99,7 @@ function loadFrame(index) {
   $("#frameCounter").textContent = `${viewer.index} / ${viewer.total}`;
   $("#previousFrame").disabled = viewer.index === 1;
   $("#nextFrame").disabled = viewer.index === viewer.total;
+  $("#downloadCurrentFrame").href = `/api/datasets/${viewer.datasetId}/results/${viewer.kind}/frames/${viewer.index}/download`;
   $("#viewerLoading").hidden = false;
   const image = $("#resultImage");
   image.onload = image.onerror = () => { $("#viewerLoading").hidden = true; };
@@ -184,7 +186,12 @@ function bindEvents() {
   $("#previousFrame").addEventListener("click", () => loadFrame(state.viewer.index - 1));
   $("#nextFrame").addEventListener("click", () => loadFrame(state.viewer.index + 1));
   $("#frameSlider").addEventListener("input", event => loadFrame(event.target.value));
-  $("#resultDialog").addEventListener("close", () => { state.viewer = null; $("#resultImage").removeAttribute("src"); });
+  $("#resultDialog").addEventListener("close", () => {
+    state.viewer = null;
+    $("#resultImage").removeAttribute("src");
+    $("#downloadCurrentFrame").removeAttribute("href");
+    $("#downloadAllResults").removeAttribute("href");
+  });
   addEventListener("click", event => { if (!event.target.closest("#filterMenu")) $("#filterMenu").open = false; });
   addEventListener("popstate", () => {
     const requestedTab = new URL(location.href).searchParams.get("tab");

@@ -29,10 +29,23 @@ run_logged() {
   "$@" >>"$BOOTSTRAP_LOG" 2>&1
 }
 
+# The executable bit says nothing about the architecture. A folder copied from
+# another computer (macOS -> Linux, Intel -> ARM) carries a uv binary that looks
+# installed but cannot run here, so run it and check.
+uv_runs() {
+  [ -x "$UV_BIN" ] && run_logged "$UV_BIN" --version
+}
+
 : >"$BOOTSTRAP_LOG"
 log "[1/6] Checking startup tools"
 
-if [ ! -x "$UV_BIN" ]; then
+FOREIGN_TOOLCHAIN=0
+if ! uv_runs; then
+  if [ -e "$UV_BIN" ]; then
+    log "The bundled startup tool cannot run on this computer. Reinstalling it..."
+    FOREIGN_TOOLCHAIN=1
+    rm -f "$UV_BIN" "$TOOLS_DIR/uvx"
+  fi
   log "An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies."
   INSTALLER_URL="https://releases.astral.sh/github/uv/releases/download/$UV_VERSION/uv-installer.sh"
   if command -v curl >/dev/null 2>&1; then
@@ -50,6 +63,10 @@ if [ ! -x "$UV_BIN" ]; then
   if ! UV_UNMANAGED_INSTALL="$TOOLS_DIR" sh "$TOOLS_DIR/install.sh" >>"$BOOTSTRAP_LOG" 2>&1; then
     fail "The startup tool could not be installed. Check your connection and start the application again."
   fi
+
+  if ! uv_runs; then
+    fail "The startup tool was installed but does not run on this computer. Send the log to technical support."
+  fi
 fi
 
 log "[2/6] Preparing Python 3.11"
@@ -60,7 +77,9 @@ fi
 VENV_PYTHON="$SCRIPT_DIR/.venv/bin/python"
 NEEDS_REBUILD=0
 if [ -e "$SCRIPT_DIR/.venv" ]; then
-  if [ ! -x "$VENV_PYTHON" ]; then
+  if [ "$FOREIGN_TOOLCHAIN" -eq 1 ]; then
+    NEEDS_REBUILD=1
+  elif [ ! -x "$VENV_PYTHON" ]; then
     NEEDS_REBUILD=1
   elif ! "$VENV_PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)' >/dev/null 2>&1; then
     NEEDS_REBUILD=1

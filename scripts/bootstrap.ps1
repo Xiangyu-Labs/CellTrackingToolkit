@@ -56,9 +56,37 @@ function Invoke-Logged {
     }
 }
 
+# The file existing says nothing about the architecture. A folder copied from
+# another computer (Intel -> ARM, macOS -> Windows) carries a uv binary that
+# looks installed but cannot run here, so run it and check.
+function Test-UvRuns {
+    if (-not (Test-Path $UvExe -PathType Leaf)) {
+        return $false
+    }
+
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $UvExe --version *>> $BootstrapLog
+        return ($LASTEXITCODE -eq 0)
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+}
+
 try {
     Write-Stage "[1/6] Checking startup tools"
-    if (-not (Test-Path $UvExe -PathType Leaf)) {
+    $ForeignToolchain = $false
+    if (-not (Test-UvRuns)) {
+        if (Test-Path $UvExe -PathType Leaf) {
+            Write-Stage "The bundled startup tool cannot run on this computer. Reinstalling it..."
+            $ForeignToolchain = $true
+            Remove-Item $UvExe, (Join-Path $ToolsDir "uvx.exe") -Force -ErrorAction SilentlyContinue
+        }
         Write-Stage "An internet connection is required for the first installation. The process usually takes several minutes and may download several GB of scientific computing dependencies."
         $Installer = Join-Path $ToolsDir "install.ps1"
         try {
@@ -82,6 +110,10 @@ try {
         finally {
             Remove-Item Env:\UV_UNMANAGED_INSTALL -ErrorAction SilentlyContinue
         }
+
+        if (-not (Test-UvRuns)) {
+            Stop-Launch "The startup tool was installed but does not run on this computer. Send the log to technical support."
+        }
     }
 
     Write-Stage "[2/6] Preparing Python 3.11"
@@ -94,7 +126,10 @@ try {
 
     $NeedsRebuild = $false
     if (Test-Path (Join-Path $ProjectRoot ".venv")) {
-        if (-not (Test-Path $VenvPython -PathType Leaf)) {
+        if ($ForeignToolchain) {
+            $NeedsRebuild = $true
+        }
+        elseif (-not (Test-Path $VenvPython -PathType Leaf)) {
             $NeedsRebuild = $true
         }
         else {

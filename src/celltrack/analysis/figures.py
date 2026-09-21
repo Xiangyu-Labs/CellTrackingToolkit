@@ -14,20 +14,23 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import stats
 
 
 from celltrack.analysis.compute import (
+    _finite_metric_values,
     dataset_metric_values,
     msd_summary,
     statistical_results,
-    turning_angle_distribution,
 )
-from celltrack.analysis.models import SUMMARY_METRICS, TEMPORAL_METRICS
+from celltrack.analysis.models import FIGURE_TYPES, SUMMARY_METRICS, TEMPORAL_METRICS
 
 COLORS = ("#156F62", "#D97706", "#2563EB", "#B42318", "#7C3AED", "#087EA4")
 LINE_STYLES = ("-", "--", "-.", ":", (0, (5, 2, 1, 2)), (0, (3, 1, 1, 1)))
 TYPE_COLORS = {"Random": "#B42318", "Mixed": "#D97706", "Directed": "#19704E"}
 BACKGROUND = "#FFFFFF"
+GRID_COLUMNS = 3
+SAMPLE_SIZE_NOTE = "n = tracks (datasets)"
 
 plt.rcParams.update({
     "font.family": "sans-serif",
@@ -54,9 +57,19 @@ def _style(ax: plt.Axes) -> None:
 
 
 def _figure(rows: int = 1, columns: int = 1, width: float = 5.2, height: float = 3.8):
-    fig, axes = plt.subplots(rows, columns, figsize=(columns * width, rows * height), squeeze=False)
+    """Every figure uses constrained layout so titles, legends and brackets get room."""
+    fig, axes = plt.subplots(
+        rows, columns,
+        figsize=(columns * width, rows * height),
+        squeeze=False,
+        layout="constrained",
+    )
     fig.patch.set_facecolor(BACKGROUND)
     return fig, axes
+
+
+def _grid_rows(count: int) -> int:
+    return max(1, math.ceil(count / GRID_COLUMNS))
 
 
 def _empty_figure(title: str, message: str) -> bytes:
@@ -75,11 +88,9 @@ def _tracks(bundle, prefer_long: bool) -> list:
     return result
 
 
-def _summaries(bundle, prefer_long: bool) -> list:
-    result = []
-    for group in bundle.groups:
-        result.extend(bundle.summaries_for(group, prefer_long))
-    return result
+def _hide_unused(axes, used: int) -> None:
+    for ax in axes.flat[used:]:
+        ax.set_visible(False)
 
 
 def _temporal_values(tracks: list, attribute: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -99,48 +110,39 @@ def _temporal_values(tracks: list, attribute: str) -> tuple[np.ndarray, np.ndarr
     return frames, means, sem
 
 
-def _plot_temporal(bundle, title: str, prefer_long: bool, metrics: tuple[tuple[str, str], ...]) -> bytes:
-    columns = 3
-    rows = math.ceil(len(metrics) / columns)
-    fig, axes = _figure(rows, columns, width=4.3, height=3.2)
-    fig.suptitle(title, fontsize=15, y=1.005)
-    for ax, (attribute, label) in zip(axes.flat, metrics):
-        for index, group in enumerate(bundle.groups):
-            frames, mean, sem = _temporal_values(list(bundle.tracks_for(group, prefer_long)), attribute)
-            if not len(frames):
-                continue
-            color = COLORS[index % len(COLORS)]
-            ax.plot(frames, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], linewidth=1.7, label=group)
-            ax.fill_between(frames, mean - sem, mean + sem, color=color, alpha=0.12)
-        ax.set_title(label, fontsize=10)
-        ax.set_xlabel("Frame", fontsize=8)
-        _style(ax)
-    for ax in axes.flat[len(metrics):]:
-        ax.set_visible(False)
-    handles, labels = axes.flat[0].get_legend_handles_labels()
-    if handles:
-        fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.975), ncol=min(6, len(labels)), frameon=False, fontsize=9)
-        fig.subplots_adjust(top=0.89, hspace=0.42, wspace=0.28)
-    return _png(fig)
-
-
-def _plot_temporal_axes(bundle, axes, prefer_long: bool, metrics: tuple[tuple[str, str], ...]) -> None:
+def _plot_temporal_axes(bundle, axes, prefer_long: bool, metrics, linewidth: float = 1.4) -> None:
     for ax, (attribute, label) in zip(axes, metrics):
         for index, group in enumerate(bundle.groups):
             frames, mean, sem = _temporal_values(list(bundle.tracks_for(group, prefer_long)), attribute)
             if not len(frames):
                 continue
             color = COLORS[index % len(COLORS)]
-            ax.plot(frames, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], linewidth=1.4, label=group)
+            ax.plot(frames, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], linewidth=linewidth, label=group)
             ax.fill_between(frames, mean - sem, mean + sem, color=color, alpha=0.12)
         ax.set_title(label, fontsize=9)
         ax.set_xlabel("Frame", fontsize=8)
         _style(ax)
 
 
+def _plot_temporal(bundle, title: str, prefer_long: bool, metrics) -> bytes:
+    rows = _grid_rows(len(metrics))
+    fig, axes = _figure(rows, GRID_COLUMNS, width=4.3, height=3.2)
+    fig.suptitle(title, fontsize=15)
+    _plot_temporal_axes(bundle, axes.flat, prefer_long, metrics, linewidth=1.7)
+    _hide_unused(axes, len(metrics))
+    handles, labels = axes.flat[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(handles, labels, loc="outside lower center", ncol=min(6, len(labels)), frameon=False, fontsize=9)
+    return _png(fig)
+
+
 def _plot_cell_appearance_axes(bundle, axes) -> None:
+    minimum = bundle.parameters.appearance_min_observations
     for index, group in enumerate(bundle.groups):
-        tracks = bundle.tracks_for(group, prefer_long=False)
+        tracks = [
+            track for track in bundle.tracks_for(group, prefer_long=False)
+            if len(track.raw.timeframe) >= minimum
+        ]
         first = [track.raw.timeframe[0] for track in tracks]
         last = [track.raw.timeframe[-1] for track in tracks]
         if not first:
@@ -156,79 +158,125 @@ def _plot_cell_appearance_axes(bundle, axes) -> None:
             _style(ax)
 
 
+def _appearance_subtitle(bundle) -> str:
+    return f"tracks with at least {bundle.parameters.appearance_min_observations} observations"
+
+
 def figure_cell_appearance(bundle) -> bytes:
     fig, axes = _figure(1, 3, width=4.6, height=4)
-    fig.suptitle("Cell appearance over time", fontsize=15, y=1.01)
+    fig.suptitle(f"Cell appearance over time\n({_appearance_subtitle(bundle)})", fontsize=14)
     _plot_cell_appearance_axes(bundle, axes[0])
     handles, labels = axes[0, 0].get_legend_handles_labels()
     if handles:
         axes[0, 0].legend(handles, labels, frameon=False, fontsize=8)
-    fig.tight_layout()
     return _png(fig)
 
 
 def figure_classification(bundle) -> bytes:
     fig, axes = _figure(1, 3, width=4.8, height=4.2)
-    fig.suptitle("Trajectory classification", fontsize=15, y=1.01)
+    fig.suptitle(f"Trajectory classification  ·  {SAMPLE_SIZE_NOTE}", fontsize=14)
     _plot_classification_axes(bundle, axes[0])
-    fig.tight_layout()
     return _png(fig)
 
 
 def figure_turning_angle_distribution(bundle) -> bytes:
-    distributions = [turning_angle_distribution(bundle, group, prefer_long=True) for group in bundle.groups]
-    if not any(distributions):
-        return _empty_figure("Step turning-angle distribution", "No valid turning-angle values are available.")
+    """Per-track turning-angle variability, with a KDE over a data-driven range."""
+    values_by_group = [
+        np.asarray([
+            item.turning_angle_std for item in bundle.summaries_for(group, True)
+            if math.isfinite(item.turning_angle_std)
+        ], dtype=float)
+        for group in bundle.groups
+    ]
+    populated = [values for values in values_by_group if len(values)]
+    if not populated:
+        return _empty_figure("Turning-angle variability distribution", "No valid turning-angle values are available.")
+    finite = np.concatenate(populated)
+    minimum, maximum = float(np.min(finite)), float(np.max(finite))
+    padding = max((maximum - minimum) * 0.05, 1.0)
+    left, right = minimum - padding, maximum + padding
+    bins = np.linspace(left, right, 21)
     fig, axes = _figure(width=8.2, height=4.8)
     ax = axes[0, 0]
-    for index, (group, points) in enumerate(zip(bundle.groups, distributions)):
-        if not points:
+    unavailable = []
+    for index, (group, values) in enumerate(zip(bundle.groups, values_by_group)):
+        if not len(values):
+            unavailable.append(group)
             continue
         color = COLORS[index % len(COLORS)]
-        angles = np.asarray([point.angle_degrees for point in points])
-        density = np.asarray([point.mean_density for point in points])
-        ax.plot(angles, density, color=color, linewidth=2, label=f"{group} (n={points[0].n} datasets)")
-        valid_ci = np.asarray([point.ci_low is not None and point.ci_high is not None for point in points])
-        if any(valid_ci):
-            low = np.asarray([max(0.0, point.ci_low) if point.ci_low is not None else point.mean_density for point in points])
-            high = np.asarray([point.ci_high if point.ci_high is not None else point.mean_density for point in points])
-            ax.fill_between(angles, low, high, where=valid_ci, color=color, alpha=0.14)
-    ax.set_xlim(0, 180)
-    ax.set_xticks(np.arange(0, 181, 30))
-    ax.set_xlabel("Step turning angle (°)")
+        median = float(np.median(values))
+        ax.hist(values, bins=bins, density=True, alpha=0.2, color=color, edgecolor=color, linewidth=0.7)
+        if len(values) >= 2 and np.ptp(values) > 0:
+            grid = np.linspace(left, right, 400)
+            try:
+                ax.plot(grid, stats.gaussian_kde(values)(grid), color=color, linewidth=2)
+            except np.linalg.LinAlgError:
+                unavailable.append(group)
+        else:
+            unavailable.append(group)
+        ax.axvline(median, color=color, linestyle="--", linewidth=1.5, label=f"{group} (median={median:.1f}°, n={len(values)})")
+    ax.set_xlim(left, right)
+    ax.set_xlabel("Turning angle std (°)")
     ax.set_ylabel("Density")
-    ax.set_title("Step turning-angle distribution (dataset mean ± 95% CI)")
+    ax.set_title("Turning-angle variability distribution")
+    if unavailable:
+        ax.text(
+            0.99, 0.02, f"KDE unavailable: {', '.join(unavailable)}",
+            transform=ax.transAxes, ha="right", va="bottom", fontsize=8, color="#61716D",
+        )
     ax.legend(frameon=False, fontsize=8)
     _style(ax)
-    fig.tight_layout()
     return _png(fig)
+
+
+def _msd_scales(bundle) -> tuple[float, float]:
+    return (
+        bundle.parameters.frame_interval_minutes or 1.0,
+        (bundle.parameters.microns_per_pixel or 1.0) ** 2,
+    )
+
+
+def _mean_msd(series_list: tuple, time_scale: float, distance_scale: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pool MSD across tracks at each lag, then report the mean and its SEM."""
+    by_lag: dict[float, list[float]] = defaultdict(list)
+    for series in series_list:
+        for lag, value in zip(series.lag_frames, series.values):
+            if value > 0:
+                by_lag[float(lag)].append(float(value))
+    lag = np.asarray(sorted(by_lag), dtype=float)
+    mean = np.asarray([statistics.fmean(by_lag[value]) for value in lag], dtype=float)
+    sem = np.asarray([
+        statistics.stdev(by_lag[value]) / math.sqrt(len(by_lag[value])) if len(by_lag[value]) > 1 else 0.0
+        for value in lag
+    ], dtype=float)
+    return lag * time_scale, mean * distance_scale, sem * distance_scale
+
+
+def _msd_labels(bundle) -> tuple[str, str]:
+    return (
+        "Time lag (min)" if bundle.parameters.frame_interval_minutes is not None else "Frame lag",
+        "MSD (µm²)" if bundle.parameters.microns_per_pixel is not None else "MSD (px²)",
+    )
 
 
 def _plot_msd(bundle, title: str, prefer_long: bool) -> bytes:
     fig, axes = _figure(1, 3, width=4.8, height=4.2)
-    fig.suptitle(title, fontsize=15, y=1.01)
+    fig.suptitle(title, fontsize=14)
+    time_scale, distance_scale = _msd_scales(bundle)
     alpha_values = []
     for index, group in enumerate(bundle.groups):
         series = bundle.msd_for(group, prefer_long)
-        points = msd_summary(bundle, group, prefer_long=prefer_long, filter_sparse_tail=True)
-        lag = np.asarray([point.lag for point in points])
-        mean = np.asarray([point.mean for point in points])
+        lag, mean, sem = _mean_msd(series, time_scale, distance_scale)
         color = COLORS[index % len(COLORS)]
         if len(lag):
             axes[0, 0].plot(lag, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], label=group)
+            axes[0, 0].fill_between(lag, np.maximum(0.0, mean - sem), mean + sem, color=color, alpha=0.12)
             axes[0, 1].loglog(lag, mean, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], label=group)
-            valid_ci = np.asarray([point.ci_low is not None and point.ci_high is not None for point in points])
-            if any(valid_ci):
-                low = np.asarray([max(0.0, point.ci_low) if point.ci_low is not None else point.mean for point in points])
-                high = np.asarray([point.ci_high if point.ci_high is not None else point.mean for point in points])
-                axes[0, 0].fill_between(lag, low, high, where=valid_ci, color=color, alpha=0.14)
-        by_dataset: dict[str, list[float]] = defaultdict(list)
-        for item in series:
-            if item.alpha is not None and math.isfinite(item.alpha):
-                by_dataset[item.dataset].append(item.alpha)
-        alpha_values.append([statistics.fmean(values) for values in by_dataset.values() if values])
-    x_label = "Time lag (min)" if bundle.parameters.frame_interval_minutes is not None else "Frame lag"
-    y_label = "MSD (µm²)" if bundle.parameters.microns_per_pixel is not None else "MSD (px²)"
+        alpha_values.append([
+            float(item.alpha) for item in series
+            if item.alpha is not None and math.isfinite(item.alpha)
+        ])
+    x_label, y_label = _msd_labels(bundle)
     for ax, subtitle in zip(axes[0, :2], ("Population mean MSD", "Log-log MSD")):
         ax.set_title(subtitle)
         ax.set_xlabel(x_label)
@@ -243,17 +291,15 @@ def _plot_msd(bundle, title: str, prefer_long: bool) -> bytes:
         boxplot = axes[0, 2].boxplot(nonempty, positions=positions, patch_artist=True, showfliers=False)
         for position, box in zip(positions, boxplot["boxes"]):
             box.set_facecolor(COLORS[(position - 1) % len(COLORS)])
-            box.set_alpha(0.28)
-    for index, values in enumerate(alpha_values):
-        offsets = np.linspace(-0.1, 0.1, len(values)) if len(values) > 1 else np.asarray([0.0])
-        if values:
-            axes[0, 2].scatter(index + 1 + offsets, values, s=22, color=COLORS[index % len(COLORS)], zorder=3)
-    axes[0, 2].set_xticks(np.arange(1, len(bundle.groups) + 1), [f"{group}\nn={len(values)}" for group, values in zip(bundle.groups, alpha_values)])
+            box.set_alpha(0.72)
+    axes[0, 2].set_xticks(
+        np.arange(1, len(bundle.groups) + 1),
+        [f"{group}\nn={len(values)}" for group, values in zip(bundle.groups, alpha_values)],
+        rotation=20, ha="right",
+    )
     axes[0, 2].axhline(1, color="#8B9895", linewidth=1, linestyle="--")
     axes[0, 2].set_title("MSD exponent alpha")
-    axes[0, 2].tick_params(axis="x", rotation=20)
     _style(axes[0, 2])
-    fig.tight_layout()
     return _png(fig)
 
 
@@ -273,14 +319,14 @@ def figure_msd_summary(bundle) -> bytes:
             low = np.asarray([max(0.0, point.ci_low) if point.ci_low is not None else point.mean for point in points])
             high = np.asarray([point.ci_high if point.ci_high is not None else point.mean for point in points])
             ax.fill_between(lag, low, high, where=np.asarray(valid_ci), color=color, alpha=0.16)
+    x_label, y_label = _msd_labels(bundle)
     ax.set_title("MSD comparison (mean ± 95% CI)")
-    ax.set_xlabel("Time lag (min)" if bundle.parameters.frame_interval_minutes is not None else "Frame lag")
-    ax.set_ylabel("MSD (µm²)" if bundle.parameters.microns_per_pixel is not None else "MSD (px²)")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     handles, labels = ax.get_legend_handles_labels()
     if handles:
         ax.legend(handles, labels, frameon=False, fontsize=9)
     _style(ax)
-    fig.tight_layout()
     return _png(fig)
 
 
@@ -295,7 +341,14 @@ def _trajectory_limit(tracks: list) -> float:
 
 
 def _bundle_trajectory_limit(bundle) -> float:
+    """One spatial scale for every trajectory panel, so panels stay comparable."""
     return _trajectory_limit(_tracks(bundle, True))
+
+
+def _apply_trajectory_limits(ax: plt.Axes, limit: float) -> None:
+    ax.set_xlim(-limit, limit)
+    ax.set_ylim(-limit, limit)
+    ax.set_aspect("equal")
 
 
 def _angle_histogram_scale(bundle) -> tuple[np.ndarray, float]:
@@ -324,13 +377,6 @@ def _trajectory_xy(track) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(track.raw.x) - track.raw.x[0], np.asarray(track.raw.y) - track.raw.y[0]
 
 
-def _set_local_trajectory_limits(ax: plt.Axes, tracks: list) -> None:
-    limit = _trajectory_limit(tracks)
-    ax.set_xlim(-limit, limit)
-    ax.set_ylim(-limit, limit)
-    ax.set_aspect("equal")
-
-
 def _pick_representatives(bundle, group: str, count_per_type: int | None = None) -> dict[str, list]:
     count_per_type = count_per_type or bundle.parameters.representatives_per_type
     tracks = {track.uid: track for track in bundle.tracks_for(group, True)}
@@ -347,69 +393,51 @@ def _pick_representatives(bundle, group: str, count_per_type: int | None = None)
     return result
 
 
+def _plot_representative_track(ax: plt.Axes, track, trajectory_type: str, limit: float, title_size: float = 7) -> None:
+    x, y = _trajectory_xy(track)
+    for index in range(max(0, len(x) - 1)):
+        ax.plot(x[index:index + 2], y[index:index + 2], color=plt.cm.viridis(index / max(1, len(x) - 1)), linewidth=1.4)
+    ax.scatter([0], [0], s=16, color="#17211F", zorder=3)
+    ax.scatter([x[-1]], [y[-1]], s=20, color=TYPE_COLORS[trajectory_type], marker="D", zorder=3)
+    _apply_trajectory_limits(ax, limit)
+    ax.set_title(f"{track.raw.dataset}\nTrack {track.raw.track_id}", fontsize=title_size)
+    _style(ax)
+
+
 def figure_representatives(bundle, group_index: int) -> bytes:
     if group_index >= len(bundle.groups):
         return _empty_figure("Representative trajectories", f"Group {group_index + 1} was not selected.")
     group = bundle.groups[group_index]
     selected = _pick_representatives(bundle, group)
-    all_tracks = [track for values in selected.values() for track in values]
-    if not all_tracks:
+    if not any(selected.values()):
         return _empty_figure(f"{group}: representative trajectories", "No valid trajectories are available.")
+    limit = _bundle_trajectory_limit(bundle)
     columns = bundle.parameters.representatives_per_type
     fig, axes = _figure(3, columns, width=3, height=2.8)
-    fig.suptitle(f"{group}: representative trajectories", fontsize=15, y=1.005)
+    fig.suptitle(f"{group}: representative trajectories (shared scale ±{limit:.0f} px)", fontsize=14)
     for row, trajectory_type in enumerate(("Random", "Mixed", "Directed")):
+        tracks = selected[trajectory_type]
         for column, ax in enumerate(axes[row]):
-            tracks = selected[trajectory_type]
             if column >= len(tracks):
                 ax.set_visible(False)
                 continue
-            track = tracks[column]
-            x, y = _trajectory_xy(track)
-            for index in range(max(0, len(x) - 1)):
-                ax.plot(x[index:index + 2], y[index:index + 2], color=plt.cm.viridis(index / max(1, len(x) - 1)), linewidth=1.5)
-            ax.scatter([0], [0], s=20, color="#17211F", zorder=3)
-            ax.scatter([x[-1]], [y[-1]], s=24, color=TYPE_COLORS[trajectory_type], marker="D", zorder=3)
-            _set_local_trajectory_limits(ax, [track])
-            ax.set_title(f"{trajectory_type} | {track.raw.dataset}\nTrack {track.raw.track_id}", fontsize=8)
-            _style(ax)
-    fig.tight_layout()
+            _plot_representative_track(ax, tracks[column], trajectory_type, limit, title_size=8)
+            if column == 0:
+                ax.set_ylabel(trajectory_type, fontsize=9)
     return _png(fig)
 
 
-def figure_group_trajectories(bundle, group_index: int) -> bytes:
-    if group_index >= len(bundle.groups):
-        return _empty_figure("Group trajectory analysis", f"Group {group_index + 1} was not selected.")
+def _plot_group_trajectory_axes(bundle, group_index: int, axes, limit: float) -> None:
     group = bundle.groups[group_index]
     tracks = list(bundle.tracks_for(group, True))
     summaries = list(bundle.summaries_for(group, True))
-    if not tracks:
-        return _empty_figure(f"{group}: trajectory analysis", "No valid trajectories are available.")
-    limit = _bundle_trajectory_limit(bundle)
-    fig = plt.figure(figsize=(15, 4.6))
-    fig.patch.set_facecolor(BACKGROUND)
-    axes = [fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2, projection="polar"), fig.add_subplot(1, 3, 3)]
-    fig.suptitle(f"{group}: trajectory analysis", fontsize=15, y=1.01)
-    _plot_group_trajectory_axes(bundle, group_index, axes)
-    fig.tight_layout()
-    return _png(fig)
-
-
-def _plot_group_trajectory_axes(bundle, group_index: int, axes) -> None:
-    group = bundle.groups[group_index]
-    tracks = list(bundle.tracks_for(group, True))
-    summaries = list(bundle.summaries_for(group, True))
-    limit = _bundle_trajectory_limit(bundle)
     summary_by_key = {(item.dataset, item.track_id): item for item in summaries}
     for track in tracks:
         summary = summary_by_key.get((track.raw.dataset, track.raw.track_id))
         trajectory_type = summary.trajectory_type if summary else "Mixed"
-        x = np.asarray(track.raw.x) - track.raw.x[0]
-        y = np.asarray(track.raw.y) - track.raw.y[0]
+        x, y = _trajectory_xy(track)
         axes[0].plot(x, y, color=TYPE_COLORS[trajectory_type], linewidth=0.8, alpha=0.35)
-    axes[0].set_xlim(-limit, limit)
-    axes[0].set_ylim(-limit, limit)
-    axes[0].set_aspect("equal")
+    _apply_trajectory_limits(axes[0], limit)
     axes[0].set_title("Centered trajectories")
     axes[0].set_xlabel("Delta x (px)")
     axes[0].set_ylabel("Delta y (px)")
@@ -424,22 +452,37 @@ def _plot_group_trajectory_axes(bundle, group_index: int, axes) -> None:
         alpha=0.78,
     )
     axes[1].set_ylim(0, radial_limit)
-    axes[1].set_title("Final displacement angle")
-    axes[1].set_ylabel("Tracks (%)", fontsize=8, labelpad=18)
+    axes[1].set_rlabel_position(292.5)
+    axes[1].tick_params(labelsize=7, colors="#53635F")
+    axes[1].set_title("Final displacement angle (% of tracks)", fontsize=10)
     axes[1].set_facecolor(BACKGROUND)
     representatives = _pick_representatives(bundle, group, 3)
-    representative_tracks = [track for selected in representatives.values() for track in selected]
     for trajectory_type, selected in representatives.items():
         for track in selected:
-            x = np.asarray(track.raw.x) - track.raw.x[0]
-            y = np.asarray(track.raw.y) - track.raw.y[0]
+            x, y = _trajectory_xy(track)
             axes[2].plot(x, y, color=TYPE_COLORS[trajectory_type], linewidth=1.2, alpha=0.8, label=trajectory_type)
     handles, labels = axes[2].get_legend_handles_labels()
     unique = dict(zip(labels, handles))
-    axes[2].legend(unique.values(), unique.keys(), frameon=False, fontsize=8)
-    _set_local_trajectory_limits(axes[2], representative_tracks)
+    if unique:
+        axes[2].legend(unique.values(), unique.keys(), frameon=False, fontsize=8)
+    _apply_trajectory_limits(axes[2], limit)
     axes[2].set_title("Representative tracks")
+    axes[2].set_xlabel("Delta x (px)")
     _style(axes[2])
+
+
+def figure_group_trajectories(bundle, group_index: int) -> bytes:
+    if group_index >= len(bundle.groups):
+        return _empty_figure("Group trajectory analysis", f"Group {group_index + 1} was not selected.")
+    group = bundle.groups[group_index]
+    if not bundle.tracks_for(group, True):
+        return _empty_figure(f"{group}: trajectory analysis", "No valid trajectories are available.")
+    limit = _bundle_trajectory_limit(bundle)
+    fig = plt.figure(figsize=(15, 4.6), facecolor=BACKGROUND, layout="constrained")
+    axes = [fig.add_subplot(1, 3, 1), fig.add_subplot(1, 3, 2, projection="polar"), fig.add_subplot(1, 3, 3)]
+    fig.suptitle(f"{group}: trajectory analysis (shared scale ±{limit:.0f} px)", fontsize=14)
+    _plot_group_trajectory_axes(bundle, group_index, axes, limit)
+    return _png(fig)
 
 
 def _significance_label(p_value: float | None) -> str:
@@ -463,50 +506,85 @@ def _add_brackets(
     data_minimum: float,
     overall: str | None = None,
 ) -> None:
+    """Reserve the headroom first, then draw inside the axes.
+
+    Everything stays clipped to the axes so brackets can never spill into a
+    neighbouring panel, and the omnibus caption sits in its own band above the
+    highest bracket instead of on top of the significance markers.
+    """
     if not comparisons and not overall:
         return
     span = max(data_maximum - data_minimum, abs(data_maximum) * 0.1, 1e-6)
-    base = data_maximum + span * 0.09
     step = span * 0.16
     ordered = sorted(comparisons, key=lambda item: (item[1] - item[0], item[0]))
+    base = data_maximum + step * 0.55
+    top = base + max(0, len(ordered) - 1) * step + step * 0.55
+    if overall:
+        top += step * 1.3
+    bottom, current_top = ax.get_ylim()
+    ax.set_ylim(min(bottom, data_minimum - span * 0.05), max(current_top, top))
     for level, (first, second, label) in enumerate(ordered):
         height = base + level * step
         ax.plot(
             [first, first, second, second],
             [height - step * 0.2, height, height, height - step * 0.2],
-            color="#53635F", linewidth=0.8, clip_on=False,
+            color="#53635F", linewidth=0.8, clip_on=True,
         )
-        ax.text((first + second) / 2, height + step * 0.04, label, ha="center", va="bottom", fontsize=8, clip_on=False)
-    top = base + max(0, len(ordered) - 1) * step
+        ax.text((first + second) / 2, height + step * 0.04, label, ha="center", va="bottom", fontsize=8, clip_on=True)
     if overall:
-        overall_y = top + step * (0.68 if ordered else 0.1)
-        ax.text((1 + len(ax.get_xticks())) / 2, overall_y, overall, ha="center", va="bottom", fontsize=7, color="#61716D", clip_on=False)
-        top = overall_y + step * 0.45
-    current_bottom, current_top = ax.get_ylim()
-    ax.set_ylim(current_bottom, max(current_top, top + step * 0.35))
+        ax.text(
+            0.5, 0.985, overall, transform=ax.transAxes,
+            ha="center", va="top", fontsize=7, color="#61716D",
+        )
 
 
 def _metric_results(bundle, metric: str):
     return statistical_results(bundle, [metric])
 
 
+def _violin_values(values: list[float]) -> list[float]:
+    if not values:
+        return [-1e-6, 1e-6]
+    if len(values) == 1 or np.ptp(values) == 0:
+        center = float(values[0])
+        epsilon = max(abs(center) * 1e-6, 1e-6)
+        return [center - epsilon, center + epsilon]
+    return values
+
+
 def _plot_metric_distribution(ax: plt.Axes, bundle, metric: str, title: str) -> None:
-    values = [[value for _dataset, value in dataset_metric_values(bundle, group, metric)] for group in bundle.groups]
-    positions = [index + 1 for index, group_values in enumerate(values) if group_values]
-    nonempty = [group_values for group_values in values if group_values]
-    if nonempty:
-        boxplot = ax.boxplot(nonempty, positions=positions, patch_artist=True, showfliers=False, widths=0.5)
-        for position, box in zip(positions, boxplot["boxes"]):
-            box.set_facecolor(COLORS[(position - 1) % len(COLORS)])
-            box.set_edgecolor(COLORS[(position - 1) % len(COLORS)])
-            box.set_alpha(0.28)
-    for index, group_values in enumerate(values):
-        if group_values:
-            offsets = np.linspace(-0.1, 0.1, len(group_values)) if len(group_values) > 1 else np.asarray([0.0])
-            ax.scatter(index + 1 + offsets, group_values, s=22, color=COLORS[index % len(COLORS)], alpha=0.82, zorder=3)
+    """SuperPlot: the track distribution carries the shape, dataset means carry the test."""
+    track_values = [_finite_metric_values(bundle, group, metric) for group in bundle.groups]
+    dataset_values = [
+        [value for _dataset, value in dataset_metric_values(bundle, group, metric)]
+        for group in bundle.groups
+    ]
+    positions = np.arange(1, len(bundle.groups) + 1)
+    violin = ax.violinplot(
+        [_violin_values(values) for values in track_values],
+        positions=positions, showextrema=False, showmedians=True,
+    )
+    for index, body in enumerate(violin["bodies"]):
+        body.set_facecolor(COLORS[index % len(COLORS)])
+        body.set_edgecolor(COLORS[index % len(COLORS)])
+        body.set_alpha(0.45)
+    if "cmedians" in violin:
+        violin["cmedians"].set_color("#33423E")
+        violin["cmedians"].set_linewidth(1.1)
+    for index, values in enumerate(dataset_values):
+        if not values:
+            continue
+        offsets = np.linspace(-0.12, 0.12, len(values)) if len(values) > 1 else np.asarray([0.0])
+        ax.scatter(
+            index + 1 + offsets, values, s=34, zorder=4,
+            color=COLORS[index % len(COLORS)], edgecolor="#17211F", linewidth=0.6,
+        )
     ax.set_xticks(
-        np.arange(1, len(bundle.groups) + 1),
-        [f"{group}\nn={len(group_values)}" for group, group_values in zip(bundle.groups, values)],
+        positions,
+        [
+            f"{group}\nn={len(tracks)} ({len(datasets)})"
+            for group, tracks, datasets in zip(bundle.groups, track_values, dataset_values)
+        ],
         rotation=20, ha="right",
     )
     results = _metric_results(bundle, metric)
@@ -527,7 +605,7 @@ def _plot_metric_distribution(ax: plt.Axes, bundle, metric: str, title: str) -> 
             (group_positions[result.group_1], group_positions[result.group_2], _significance_label(result.p_adjusted))
             for result in pairwise
         ]
-    finite_values = [value for group_values in values for value in group_values if math.isfinite(value)]
+    finite_values = [value for values in track_values for value in values if math.isfinite(value)]
     if finite_values:
         _add_brackets(ax, comparisons, max(finite_values), min(finite_values), overall_label)
     elif overall_label:
@@ -552,7 +630,7 @@ def _plot_classification_axes(bundle, axes) -> None:
         bottom += np.asarray(values)
     axes[0].set_xticks(x, bundle.groups, rotation=20, ha="right")
     axes[0].set_ylabel("Tracks (%)")
-    axes[0].set_title("Composition")
+    axes[0].set_title("Composition", fontsize=9.5)
     axes[0].legend(frameon=False, fontsize=8)
     _style(axes[0])
     _plot_metric_distribution(axes[1], bundle, "directionality", "Directionality distribution")
@@ -561,142 +639,148 @@ def _plot_classification_axes(bundle, axes) -> None:
     axes[2].set_ylabel("Std. turning angle (deg)")
 
 
+def _parameter_metrics(bundle) -> list[tuple[str, str]]:
+    return [
+        (key, SUMMARY_METRICS[key])
+        for key in bundle.parameters.summary_metrics
+        if key != "turning_angle_std"
+    ]
+
+
 def figure_parameter_distributions(bundle) -> bytes:
-    metrics = [(key, SUMMARY_METRICS[key]) for key in bundle.parameters.summary_metrics if key != "turning_angle_std"][:9]
-    fig, axes = _figure(3, 3, width=4.2, height=3.4)
-    fig.suptitle("Dataset-level parameter distributions", fontsize=15, y=1.005)
+    metrics = _parameter_metrics(bundle)
+    fig, axes = _figure(_grid_rows(len(metrics)), GRID_COLUMNS, width=4.2, height=3.4)
+    fig.suptitle(f"Parameter distributions  ·  {SAMPLE_SIZE_NOTE}", fontsize=14)
     for ax, (attribute, title) in zip(axes.flat, metrics):
         _plot_metric_distribution(ax, bundle, attribute, title)
-    for ax in axes.flat[len(metrics):]:
-        ax.set_visible(False)
-    fig.tight_layout()
+    _hide_unused(axes, len(metrics))
     return _png(fig)
 
 
 def figure_paper_cell_and_classification(bundle) -> bytes:
     fig, axes = _figure(2, 3, width=4.8, height=4.0)
-    fig.suptitle("Cell appearance and trajectory classification", fontsize=16, y=1.005)
+    fig.suptitle(f"Cell appearance and trajectory classification  ·  {SAMPLE_SIZE_NOTE}", fontsize=15)
     _plot_cell_appearance_axes(bundle, axes[0])
     _plot_classification_axes(bundle, axes[1])
     handles, labels = axes[0, 0].get_legend_handles_labels()
     if handles:
-        fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.97), ncol=len(labels), frameon=False, fontsize=9)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+        fig.legend(handles, labels, loc="outside lower center", ncol=len(labels), frameon=False, fontsize=9)
     return _png(fig)
 
 
 def figure_paper_temporal_and_parameters(bundle) -> bytes:
-    metrics = tuple((key, TEMPORAL_METRICS[key]) for key in bundle.parameters.temporal_metrics)
-    parameter_metrics = [(key, SUMMARY_METRICS[key]) for key in bundle.parameters.summary_metrics if key != "turning_angle_std"][:9]
-    fig = plt.figure(figsize=(25, 16), facecolor=BACKGROUND)
-    subfigures = fig.subfigures(1, 2, width_ratios=(1.05, 1.0), wspace=0.04)
-    temporal_axes = subfigures[0].subplots(5, 2, squeeze=False)
-    parameter_axes = subfigures[1].subplots(3, 3, squeeze=False)
-    subfigures[0].suptitle("Long-track temporal trends", fontsize=15)
-    subfigures[1].suptitle("Dataset-level parameter distributions", fontsize=15)
-    _plot_temporal_axes(bundle, temporal_axes.flat, True, metrics)
-    for ax in temporal_axes.flat[len(metrics):]:
-        ax.set_visible(False)
+    """Left and right grids share one layout so panel i matches panel i."""
+    temporal_metrics = [(key, TEMPORAL_METRICS[key]) for key in bundle.parameters.temporal_metrics]
+    parameter_metrics = _parameter_metrics(bundle)
+    rows = max(_grid_rows(len(temporal_metrics)), _grid_rows(len(parameter_metrics)))
+    fig = plt.figure(
+        figsize=(GRID_COLUMNS * 2 * 4.2, rows * 4.4),
+        facecolor=BACKGROUND,
+        layout="constrained",
+    )
+    subfigures = fig.subfigures(1, 2, wspace=0.03)
+    temporal_axes = subfigures[0].subplots(rows, GRID_COLUMNS, squeeze=False)
+    parameter_axes = subfigures[1].subplots(rows, GRID_COLUMNS, squeeze=False)
+    subfigures[0].suptitle("Long-track temporal trends", fontsize=14)
+    subfigures[1].suptitle(f"Parameter distributions  ·  {SAMPLE_SIZE_NOTE}", fontsize=14)
+    _plot_temporal_axes(bundle, temporal_axes.flat, True, temporal_metrics)
+    _hide_unused(temporal_axes, len(temporal_metrics))
     for ax, (metric, title) in zip(parameter_axes.flat, parameter_metrics):
         _plot_metric_distribution(ax, bundle, metric, title)
-    for ax in parameter_axes.flat[len(parameter_metrics):]:
-        ax.set_visible(False)
+    _hide_unused(parameter_axes, len(parameter_metrics))
     handles, labels = temporal_axes.flat[0].get_legend_handles_labels()
     if handles:
-        subfigures[0].legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.97), ncol=len(labels), frameon=False)
-    fig.suptitle("Temporal behavior and migration parameters", fontsize=18, y=1.0)
+        subfigures[0].legend(handles, labels, loc="outside lower center", ncol=len(labels), frameon=False)
+    fig.suptitle("Temporal behavior and migration parameters", fontsize=17)
     return _png(fig)
 
 
 def figure_paper_group_trajectories(bundle) -> bytes:
     rows = len(bundle.groups)
-    fig = plt.figure(figsize=(15, 4.6 * rows), facecolor=BACKGROUND)
-    axes = []
+    limit = _bundle_trajectory_limit(bundle)
+    fig = plt.figure(figsize=(15, 4.8 * rows), facecolor=BACKGROUND, layout="constrained")
+    subfigures = fig.subfigures(rows, 1, squeeze=False)
     for row in range(rows):
+        subfigure = subfigures[row, 0]
         row_axes = [
-            fig.add_subplot(rows, 3, row * 3 + 1),
-            fig.add_subplot(rows, 3, row * 3 + 2, projection="polar"),
-            fig.add_subplot(rows, 3, row * 3 + 3),
+            subfigure.add_subplot(1, 3, 1),
+            subfigure.add_subplot(1, 3, 2, projection="polar"),
+            subfigure.add_subplot(1, 3, 3),
         ]
-        _plot_group_trajectory_axes(bundle, row, row_axes)
-        row_axes[0].text(-0.2, 1.08, bundle.groups[row], transform=row_axes[0].transAxes, fontsize=13, clip_on=False)
-        axes.extend(row_axes)
-    fig.suptitle("Group trajectory analysis", fontsize=16, y=1.0)
-    fig.tight_layout(rect=(0, 0, 1, 0.98))
+        _plot_group_trajectory_axes(bundle, row, row_axes, limit)
+        subfigure.suptitle(bundle.groups[row], fontsize=13)
+    fig.suptitle(f"Group trajectory analysis (shared scale ±{limit:.0f} px)", fontsize=15)
     return _png(fig)
-
-
-def _plot_representative_track(ax: plt.Axes, track, trajectory_type: str) -> None:
-    x, y = _trajectory_xy(track)
-    for index in range(max(0, len(x) - 1)):
-        ax.plot(x[index:index + 2], y[index:index + 2], color=plt.cm.viridis(index / max(1, len(x) - 1)), linewidth=1.4)
-    ax.scatter([0], [0], s=16, color="#17211F", zorder=3)
-    ax.scatter([x[-1]], [y[-1]], s=20, color=TYPE_COLORS[trajectory_type], marker="D", zorder=3)
-    _set_local_trajectory_limits(ax, [track])
-    ax.set_title(f"{track.raw.dataset}\nTrack {track.raw.track_id}", fontsize=7)
-    _style(ax)
 
 
 def figure_supplementary_representatives(bundle) -> bytes:
     count = bundle.parameters.representatives_per_type
+    limit = _bundle_trajectory_limit(bundle)
     horizontal = len(bundle.groups) == 2
     rows = 3 if horizontal else 3 * len(bundle.groups)
     columns = count * len(bundle.groups) if horizontal else count
     fig, axes = _figure(rows, columns, width=2.7, height=2.6)
-    fig.suptitle("Representative trajectories", fontsize=16, y=1.0)
+    fig.suptitle(f"Representative trajectories (shared scale ±{limit:.0f} px)", fontsize=15)
     for group_index, group in enumerate(bundle.groups):
         selected = _pick_representatives(bundle, group)
         for type_index, trajectory_type in enumerate(("Random", "Mixed", "Directed")):
             row = type_index if horizontal else group_index * 3 + type_index
             start_column = group_index * count if horizontal else 0
+            tracks = selected[trajectory_type]
             for column in range(count):
                 ax = axes[row, start_column + column]
-                tracks = selected[trajectory_type]
                 if column >= len(tracks):
                     ax.set_visible(False)
                     continue
-                _plot_representative_track(ax, tracks[column], trajectory_type)
+                _plot_representative_track(ax, tracks[column], trajectory_type, limit)
                 if column == 0:
                     ax.set_ylabel(f"{group}\n{trajectory_type}", fontsize=8)
-    fig.tight_layout(rect=(0, 0, 1, 0.98))
     return _png(fig)
 
 
+def _slug(group: str, index: int) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", group.casefold()).strip("-") or f"group-{index + 1}"
+
+
 def render_all_figures(bundle) -> dict[str, bytes]:
-    """Render configured figures from one shared analysis bundle."""
+    """Render configured figures from one shared analysis bundle.
+
+    Filenames are numbered by the canonical FIGURE_TYPES order rather than by
+    render order, so a given figure keeps the same prefix regardless of which
+    other figures were selected.
+    """
     selected = set(bundle.parameters.figure_types)
+    order = {key: index + 1 for index, key in enumerate(FIGURE_TYPES)}
     temporal_metrics = [(key, TEMPORAL_METRICS[key]) for key in bundle.parameters.temporal_metrics]
     rendered: dict[str, bytes] = {}
 
-    def add(filename: str, content: bytes) -> None:
-        rendered[f"figure_{len(rendered) + 1:02d}_{filename}.png"] = content
+    def add(key: str, filename: str, content: bytes) -> None:
+        rendered[f"figure_{order[key]:02d}_{filename}.png"] = content
 
     if "cell_appearance" in selected:
-        add("cell_appearance", figure_cell_appearance(bundle))
+        add("cell_appearance", "cell_appearance", figure_cell_appearance(bundle))
     if "temporal_long" in selected:
-        add("temporal_long", _plot_temporal(bundle, "Temporal trends | long tracks", True, temporal_metrics))
+        add("temporal_long", "temporal_long", _plot_temporal(bundle, "Temporal trends | long tracks", True, temporal_metrics))
     if "classification" in selected:
-        add("trajectory_classification", figure_classification(bundle))
+        add("classification", "trajectory_classification", figure_classification(bundle))
     if "turning_angle_distribution" in selected:
-        add("turning_angle_distribution", figure_turning_angle_distribution(bundle))
+        add("turning_angle_distribution", "turning_angle_distribution", figure_turning_angle_distribution(bundle))
     if "msd_long" in selected:
-        add("msd_long", _plot_msd(bundle, "Mean square displacement | long tracks", True))
+        add("msd_long", "msd_long", _plot_msd(bundle, "Mean square displacement | long tracks", True))
     if "msd_summary" in selected:
-        add("msd_summary", figure_msd_summary(bundle))
+        add("msd_summary", "msd_summary", figure_msd_summary(bundle))
     if "representatives" in selected:
         for index, group in enumerate(bundle.groups):
-            slug = re.sub(r"[^a-z0-9]+", "-", group.casefold()).strip("-") or f"group-{index + 1}"
-            add(f"{slug}_representatives", figure_representatives(bundle, index))
+            add("representatives", f"{_slug(group, index)}_representatives", figure_representatives(bundle, index))
     if "temporal_all" in selected:
-        add("temporal_all", _plot_temporal(bundle, "Temporal trends | all tracks", False, temporal_metrics))
+        add("temporal_all", "temporal_all", _plot_temporal(bundle, "Temporal trends | all tracks", False, temporal_metrics))
     if "msd_all" in selected:
-        add("msd_all", _plot_msd(bundle, "Mean square displacement | all tracks", False))
+        add("msd_all", "msd_all", _plot_msd(bundle, "Mean square displacement | all tracks", False))
     if "group_trajectories" in selected:
         for index, group in enumerate(bundle.groups):
-            slug = re.sub(r"[^a-z0-9]+", "-", group.casefold()).strip("-") or f"group-{index + 1}"
-            add(f"{slug}_trajectories", figure_group_trajectories(bundle, index))
+            add("group_trajectories", f"{_slug(group, index)}_trajectories", figure_group_trajectories(bundle, index))
     if "parameter_distributions" in selected:
-        add("parameter_distributions", figure_parameter_distributions(bundle))
+        add("parameter_distributions", "parameter_distributions", figure_parameter_distributions(bundle))
     if {"cell_appearance", "classification"} <= selected:
         rendered["paper_01_cell_and_classification.png"] = figure_paper_cell_and_classification(bundle)
     if {"temporal_long", "parameter_distributions"} <= selected:

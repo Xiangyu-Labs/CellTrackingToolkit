@@ -43,6 +43,7 @@ input[type="text"], input[type="number"], .group-editor input { min-height: 44px
 .dataset-name span { min-width: 0; display: grid; gap: 3px; }
 .dataset-name strong, .dataset-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dataset-name small, .image-count { color: var(--muted); }
+.duplicate-note { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #FEF3C7; color: #92400E; font-size: 11px; white-space: nowrap; }
 .status-stack { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .badge { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); color: var(--muted); font-size: 12px; }
 button.badge.done { border-color: #a8d9cc; background: #effaf6; color: var(--primary-dark); }

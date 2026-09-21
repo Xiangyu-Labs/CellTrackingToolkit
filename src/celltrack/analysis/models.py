@@ -29,23 +29,35 @@ SUMMARY_METRICS = {
     "mean_shape_change_rate": "Shape change rate",
 }
 
-DEFAULT_SUMMARY_METRICS = (
-    "total_path_length",
-    "net_displacement",
-    "mean_speed",
-    "directionality",
-    "mean_turning_angle",
-    "mean_area",
-    "mean_perimeter",
-    "mean_roundness",
-    "mean_shape_change_rate",
+# Panel order shared by the temporal and the parameter-distribution grids.
+# Position i on the left of paper_02 shows the same quantity as position i on
+# the right, which is what the figure review asked for. Both default metric
+# lists are derived from this table so the two sides cannot drift apart.
+METRIC_PAIRS = (
+    ("instantaneous_speed", "mean_speed"),
+    ("step_distance", "total_path_length"),
+    ("net_displacement", "net_displacement"),
+    ("directionality", "directionality"),
+    ("turning_angle", "mean_turning_angle"),
+    ("area", "mean_area"),
+    ("perimeter", "mean_perimeter"),
+    ("roundness", "mean_roundness"),
+    ("shape_change_rate", "mean_shape_change_rate"),
 )
+
+# aspect_ratio has no summary counterpart, so it stays selectable but out of the
+# default nine-panel grid.
+DEFAULT_TEMPORAL_METRICS = tuple(temporal for temporal, _summary in METRIC_PAIRS)
+
+# turning_angle_std is deliberately absent: the classification figure already
+# shows it, and the review asked for nine panels rather than ten.
+DEFAULT_SUMMARY_METRICS = tuple(summary for _temporal, summary in METRIC_PAIRS)
 
 FIGURE_TYPES = {
     "cell_appearance": "Cell appearance",
     "temporal_long": "Temporal trends (long tracks)",
     "classification": "Trajectory classification",
-    "turning_angle_distribution": "Step turning-angle distribution",
+    "turning_angle_distribution": "Turning-angle variability distribution",
     "msd_long": "Mean square displacement (long tracks)",
     "msd_summary": "MSD comparison (mean ± 95% CI)",
     "representatives": "Representative trajectories for each group",
@@ -55,20 +67,12 @@ FIGURE_TYPES = {
     "parameter_distributions": "Parameter distributions",
 }
 
-DEFAULT_FIGURE_TYPES = (
-    "cell_appearance",
-    "temporal_long",
-    "classification",
-    "turning_angle_distribution",
-    "msd_long",
-    "representatives",
-    "group_trajectories",
-    "parameter_distributions",
-)
+DEFAULT_FIGURE_TYPES = tuple(FIGURE_TYPES)
 
 
 class AnalysisParameters(BaseModel):
     long_track_min_observations: int = Field(default=50, ge=1, le=10000)
+    appearance_min_observations: int = Field(default=5, ge=1, le=10000)
     fallback_to_all_tracks: bool = True
     random_directionality_max: float = Field(default=0.2, ge=0, le=1)
     directed_directionality_min: float = Field(default=0.5, ge=0, le=1)
@@ -79,7 +83,7 @@ class AnalysisParameters(BaseModel):
     representatives_per_type: int = Field(default=4, ge=1, le=12)
     frame_interval_minutes: float | None = Field(default=None, gt=0)
     microns_per_pixel: float | None = Field(default=None, gt=0)
-    temporal_metrics: list[str] = Field(default_factory=lambda: list(TEMPORAL_METRICS))
+    temporal_metrics: list[str] = Field(default_factory=lambda: list(DEFAULT_TEMPORAL_METRICS))
     summary_metrics: list[str] = Field(default_factory=lambda: list(DEFAULT_SUMMARY_METRICS))
     figure_types: list[str] = Field(default_factory=lambda: list(DEFAULT_FIGURE_TYPES))
 
@@ -121,6 +125,7 @@ def analysis_options() -> dict[str, object]:
         "defaults": DEFAULT_ANALYSIS_PARAMETERS.model_dump(),
         "ranges": {
             "long_track_min_observations": [1, 10000],
+            "appearance_min_observations": [1, 10000],
             "random_directionality_max": [0, 1],
             "directed_directionality_min": [0, 1],
             "msd_max_lag": [1, 10000],

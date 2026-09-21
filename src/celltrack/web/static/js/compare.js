@@ -1,8 +1,9 @@
 import { state, escapeHtml } from "./state.js?v=5";
-import { formatText } from "./strings.js?v=4";
+import { formatText } from "./strings.js?v=6";
 
 const numericFields = [
   ["long_track_min_observations", "Long-track observations", 1],
+  ["appearance_min_observations", "Cell-appearance minimum observations", 1],
   ["random_directionality_max", "Random directionality max", 0.01],
   ["directed_directionality_min", "Directed directionality min", 0.01],
   ["msd_max_lag", "MSD maximum lag", 1],

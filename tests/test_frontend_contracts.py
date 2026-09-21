@@ -45,14 +45,14 @@ class FrontendContractTests(unittest.TestCase):
         app = self.read_static("js/app.js")
 
         for asset in (
-            "/static/css/components.css?v=7",
+            "/static/css/components.css?v=8",
             "/static/css/layout.css?v=7",
-            "/static/js/app.js?v=16",
+            "/static/js/app.js?v=17",
         ):
             self.assertIn(asset, index)
-        self.assertIn('"./workflow.js?v=10"', app)
-        self.assertIn('"./compare.js?v=10"', app)
-        self.assertIn('"./strings.js?v=5"', app)
+        self.assertIn('"./workflow.js?v=11"', app)
+        self.assertIn('"./compare.js?v=11"', app)
+        self.assertIn('"./strings.js?v=6"', app)
 
     def test_result_viewer_has_download_links_and_updates_frame_url(self):
         index = self.read_static("index.html")
@@ -81,7 +81,7 @@ class WebCacheTests(unittest.TestCase):
         for path in (
             "/",
             "/analysis/tasks/pending",
-            "/static/js/app.js?v=16",
+            "/static/js/app.js?v=17",
             "/static/css/layout.css?v=7",
         ):
             with self.subTest(path=path):

@@ -10,6 +10,8 @@ export const TEXT = Object.freeze({
   clearVisible: "Clear visible",
   dataset: "Dataset",
   images: "Images",
+  duplicateFrames: "{count} duplicate",
+  duplicateFramesHint: "Byte-identical repeated frames were excluded from this sequence. Delete them from the folder to silence this note.",
   status: "Status",
   empty: "No matching datasets",
   all: "All",

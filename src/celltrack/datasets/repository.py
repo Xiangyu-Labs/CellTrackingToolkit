@@ -22,6 +22,7 @@ class Dataset:
     relative_path: str
     path: Path
     images: tuple[Path, ...]
+    duplicate_images: tuple[Path, ...] = ()
 
     @property
     def result_dir(self) -> Path:
@@ -44,6 +45,50 @@ class Dataset:
         return self.tracking_dir / "tracking_results.csv"
 
 
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha1()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _partition_duplicates(paths: tuple[Path, ...]) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    """Split a frame sequence into unique frames and byte-identical repeats.
+
+    Copies such as ``frame_001 (1).tif`` sort straight after the original and
+    would otherwise enter the sequence as an extra, motionless frame. Only files
+    that share a size are hashed, so discovery stays cheap on large datasets.
+    """
+    by_size: dict[int, list[Path]] = {}
+    for path in paths:
+        try:
+            by_size.setdefault(path.stat().st_size, []).append(path)
+        except OSError:
+            by_size.setdefault(-1, []).append(path)
+    repeated: set[Path] = set()
+    for group in by_size.values():
+        if len(group) < 2:
+            continue
+        identical: dict[str, list[Path]] = {}
+        for path in group:
+            try:
+                digest = _file_digest(path)
+            except OSError:
+                continue
+            identical.setdefault(digest, []).append(path)
+        for matches in identical.values():
+            if len(matches) < 2:
+                continue
+            # Keep the plainest name: "frame_001.tif" over "frame_001 (1).tif",
+            # which natural ordering would otherwise put first.
+            keeper = min(matches, key=lambda item: (len(item.name), natural_key(item.name)))
+            repeated.update(path for path in matches if path != keeper)
+    images = tuple(path for path in paths if path not in repeated)
+    duplicates = tuple(path for path in paths if path in repeated)
+    return images, duplicates
+
+
 def _dataset_id(relative_path: str) -> str:
     return hashlib.sha1(relative_path.encode("utf-8")).hexdigest()[:12]
 
@@ -54,12 +99,13 @@ def discover_datasets(root: Path | None = None) -> list[Dataset]:
         return []
     datasets: list[Dataset] = []
     for directory in (path for path in root.rglob("*") if path.is_dir()):
-        images = tuple(sorted(
+        candidates = tuple(sorted(
             (path for path in directory.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES),
             key=lambda path: natural_key(path.name),
         ))
-        if not images:
+        if not candidates:
             continue
+        images, duplicates = _partition_duplicates(candidates)
         relative = directory.relative_to(root).as_posix()
         parent = directory.parent.relative_to(root).as_posix()
         datasets.append(Dataset(
@@ -69,6 +115,7 @@ def discover_datasets(root: Path | None = None) -> list[Dataset]:
             relative_path=relative,
             path=directory,
             images=images,
+            duplicate_images=duplicates,
         ))
     return sorted(datasets, key=lambda item: natural_key(item.relative_path))
 
@@ -106,6 +153,7 @@ def serialize_dataset(dataset: Dataset) -> dict[str, object]:
         "group_path": dataset.group_path,
         "relative_path": dataset.relative_path,
         "image_count": len(dataset.images),
+        "duplicate_image_count": len(dataset.duplicate_images),
         "preview_url": f"/api/datasets/{dataset.id}/preview",
         "segmentation": {
             "completed": segmentation_complete(dataset),

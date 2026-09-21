@@ -22,7 +22,7 @@ from celltrack.analysis import figures
 from celltrack.analysis.jobs import AnalysisTaskManager
 from celltrack.analysis.models import AnalysisParameters, DEFAULT_ANALYSIS_PARAMETERS
 from celltrack.analysis.storage import AnalysisNotFoundError, AnalysisStore, analysis_payload
-from celltrack.datasets import discover_datasets, require_datasets
+from celltrack.datasets import discover_datasets, require_datasets, serialize_dataset
 from celltrack.jobs.manager import Job, JobCancelled, JobManager, SEGMENT_PROGRESS_RE
 
 
@@ -38,6 +38,34 @@ class DatasetDiscoveryTests(unittest.TestCase):
             datasets = discover_datasets(root)
             self.assertEqual([item.relative_path for item in datasets], ["A/one", "custom/deep/two"])
             self.assertEqual(len({item.id for item in datasets}), 2)
+
+    def test_byte_identical_repeat_frames_are_excluded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / "plate" / "well_01"
+            folder.mkdir(parents=True)
+            (folder / "frame_001.tif").write_bytes(b"first-frame")
+            (folder / "frame_001 (1).tif").write_bytes(b"first-frame")
+            (folder / "frame_002.tif").write_bytes(b"second-frame")
+            (folder / "frame_003.tif").write_bytes(b"third-frame!")
+            dataset = discover_datasets(root)[0]
+            self.assertEqual(
+                [path.name for path in dataset.images],
+                ["frame_001.tif", "frame_002.tif", "frame_003.tif"],
+            )
+            self.assertEqual([path.name for path in dataset.duplicate_images], ["frame_001 (1).tif"])
+            self.assertEqual(serialize_dataset(dataset)["duplicate_image_count"], 1)
+
+    def test_same_size_but_different_frames_are_both_kept(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / "plate" / "well_02"
+            folder.mkdir(parents=True)
+            (folder / "frame_001.tif").write_bytes(b"aaaa")
+            (folder / "frame_002.tif").write_bytes(b"bbbb")
+            dataset = discover_datasets(root)[0]
+            self.assertEqual(len(dataset.images), 2)
+            self.assertEqual(dataset.duplicate_images, ())
 
     def test_unknown_dataset_id_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -93,19 +121,28 @@ class JobProgressTests(unittest.TestCase):
 
 class AnalysisTests(unittest.TestCase):
     def test_paper_focused_analysis_defaults(self):
+        from celltrack.analysis.models import FIGURE_TYPES
+
         parameters = AnalysisParameters()
-        self.assertEqual(parameters.figure_types, [
-            "cell_appearance", "temporal_long", "classification",
-            "turning_angle_distribution", "msd_long", "representatives",
-            "group_trajectories", "parameter_distributions",
-        ])
+        self.assertEqual(parameters.figure_types, list(FIGURE_TYPES))
         self.assertEqual(parameters.summary_metrics, [
-            "total_path_length", "net_displacement", "mean_speed", "directionality",
+            "mean_speed", "total_path_length", "net_displacement", "directionality",
             "mean_turning_angle", "mean_area", "mean_perimeter", "mean_roundness",
             "mean_shape_change_rate",
         ])
         self.assertNotIn("turning_angle_std", parameters.summary_metrics)
-        self.assertEqual(len(parameters.temporal_metrics), 10)
+        self.assertNotIn("aspect_ratio", parameters.temporal_metrics)
+
+    def test_temporal_and_summary_grids_are_paired_nine_by_nine(self):
+        from celltrack.analysis.models import METRIC_PAIRS
+
+        parameters = AnalysisParameters()
+        self.assertEqual(len(parameters.temporal_metrics), 9)
+        self.assertEqual(len(parameters.summary_metrics), 9)
+        self.assertEqual(
+            list(zip(parameters.temporal_metrics, parameters.summary_metrics)),
+            [tuple(pair) for pair in METRIC_PAIRS],
+        )
 
     def test_analysis_task_runs_in_background_and_exposes_result(self):
         started = threading.Event()
@@ -287,8 +324,8 @@ class AnalysisTests(unittest.TestCase):
             ], parameters)
             rendered = figures.render_all_figures(bundle)
             self.assertEqual(list(rendered), [
-                "figure_01_turning_angle_distribution.png",
-                "figure_02_msd_summary.png",
+                "figure_04_turning_angle_distribution.png",
+                "figure_06_msd_summary.png",
             ])
             self.assertTrue(all(content.startswith(b"\x89PNG\r\n\x1a\n") for content in rendered.values()))
 
@@ -299,10 +336,18 @@ class AnalysisTests(unittest.TestCase):
         bundle = AnalysisBundle(("A", "B"), (), (), (), 0, parameters)
         rendered = figures.render_all_figures(bundle)
         self.assertEqual(list(rendered), [
-            "figure_01_msd_summary.png",
-            "figure_02_temporal_all.png",
-            "figure_03_msd_all.png",
+            "figure_06_msd_summary.png",
+            "figure_08_temporal_all.png",
+            "figure_09_msd_all.png",
         ])
+
+    def test_figure_numbering_does_not_shift_with_the_selection(self):
+        from celltrack.analysis.compute import AnalysisBundle
+
+        for figure_types in (["msd_summary"], ["temporal_all", "msd_summary"], ["msd_all", "msd_summary"]):
+            bundle = AnalysisBundle(("A", "B"), (), (), (), 0, AnalysisParameters(figure_types=figure_types))
+            rendered = figures.render_all_figures(bundle)
+            self.assertIn("figure_06_msd_summary.png", rendered, figure_types)
 
     def test_msd_summary_applies_calibration_and_sparse_tail_filter(self):
         from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, MsdSeries, RawTrack, msd_summary
@@ -361,7 +406,8 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNone(points[0].ci_low)
         self.assertIsNone(points[0].ci_high)
 
-    def test_msd_summary_averages_tracks_within_each_dataset_first(self):
+    def test_msd_summary_pools_every_track_at_each_lag(self):
+        """Each track is one sample, as in the version the figure review approved."""
         from celltrack.analysis.compute import GroupedTrack, MsdSeries, RawTrack, msd_summary
 
         def track(dataset, track_id):
@@ -380,32 +426,116 @@ class AnalysisTests(unittest.TestCase):
             ("A",), tracks, (), series, 0, AnalysisParameters(figure_types=["msd_summary"]),
         )
         points = msd_summary(bundle, "A")
-        self.assertEqual(points[0].mean, 60.0)
-        self.assertEqual(points[0].n, 2)
+        self.assertAlmostEqual(points[0].mean, 140.0 / 3)
+        self.assertEqual(points[0].n, 3)
 
-    def test_turning_angle_distribution_weights_datasets_equally(self):
-        from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack, turning_angle_distribution
+    def test_turning_angle_figure_uses_per_track_variability(self):
+        """The figure is back to the per-track std KDE over a data-driven range."""
+        from celltrack.analysis.compute import AnalysisBundle, TrackSummary
 
-        def track(dataset, track_id, turning):
-            return GroupedTrack("A", RawTrack(
-                dataset, track_id, tuple(range(50)), tuple(range(50)), tuple(range(50)),
-                (), (), (), (), tuple(turning), (), (), (), (), (),
-            ))
+        def summary(track_id, std):
+            return TrackSummary(
+                "A", "sample", track_id, 60, 0, 59, 100.0, 1.0, 50.0, 0.5,
+                80.0, std, 10.0, 12.0, 1.2, 0.9, 0.1, "Mixed", 0.3,
+            )
 
-        tracks = (
-            track("short", 1, [5.0]),
-            track("long", 2, [175.0] * 100),
-        )
+        summaries = tuple(summary(index, 40.0 + index) for index in range(1, 11))
         bundle = AnalysisBundle(
-            ("A",), tracks, (), (), 0,
+            ("A",), (), summaries, (), 0,
             AnalysisParameters(figure_types=["turning_angle_distribution"]),
         )
-        points = turning_angle_distribution(bundle, "A")
-        self.assertEqual(len(points), 18)
-        self.assertEqual(points[0].angle_degrees, 5.0)
-        self.assertAlmostEqual(points[0].mean_density, 0.05)
-        self.assertAlmostEqual(points[-1].mean_density, 0.05)
-        self.assertEqual(points[0].n, 2)
+        image = figures.figure_turning_angle_distribution(bundle)
+        self.assertTrue(image.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertFalse(hasattr(analysis, "turning_angle_distribution"))
+
+    def test_every_trajectory_panel_uses_the_shared_bundle_scale(self):
+        """The axis-range complaint: panels must not each pick their own scale."""
+        bundle = self._trajectory_bundle()
+        limit = figures._bundle_trajectory_limit(bundle)
+        seen = []
+
+        original = figures._apply_trajectory_limits
+
+        def record(ax, value):
+            seen.append(value)
+            original(ax, value)
+
+        with patch.object(figures, "_apply_trajectory_limits", record):
+            figures.figure_representatives(bundle, 0)
+            figures.figure_group_trajectories(bundle, 0)
+            figures.figure_supplementary_representatives(bundle)
+            figures.figure_paper_group_trajectories(bundle)
+        figures.plt.close("all")
+        self.assertTrue(seen)
+        self.assertEqual(set(seen), {limit})
+
+    def test_significance_annotations_stay_inside_the_axes(self):
+        """The overlap complaint: brackets and caption must not leave the panel."""
+        fig, axes = figures._figure()
+        ax = axes[0, 0]
+        ax.set_ylim(0, 10)
+        figures._add_brackets(
+            ax,
+            [(1, 2, "***"), (2, 3, "*"), (1, 3, "ns")],
+            data_maximum=10.0, data_minimum=0.0,
+            overall="Kruskal-Wallis p=0.001; epsilon^2=0.500",
+        )
+        bottom, top = ax.get_ylim()
+        for line in ax.lines:
+            self.assertTrue(line.get_clip_on())
+            for value in line.get_ydata():
+                self.assertLessEqual(value, top)
+                self.assertGreaterEqual(value, bottom)
+        figures.plt.close(fig)
+
+    def test_cell_appearance_drops_short_junk_tracks(self):
+        """The first-frame spike: one-frame detections must not count as arrivals."""
+        with tempfile.TemporaryDirectory() as temporary:
+            csv_path = Path(temporary) / "tracking.csv"
+            rows = ["track_id,timeframe,x,y,polygon"]
+            for track_id in range(1, 21):
+                rows.append(f"{track_id},0,{track_id},{track_id},")
+            for frame in range(1, 30):
+                rows.append(f"99,{frame},{frame},{frame},")
+            csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+            sources = [("A", [("sample-a", csv_path)]), ("B", [("sample-b", csv_path)])]
+
+            unfiltered = analysis.prepare_analysis(sources, AnalysisParameters(
+                appearance_min_observations=1, figure_types=["cell_appearance"],
+            ))
+            filtered = analysis.prepare_analysis(sources, AnalysisParameters(
+                appearance_min_observations=5, figure_types=["cell_appearance"],
+            ))
+
+            def first_frame_arrivals(bundle):
+                minimum = bundle.parameters.appearance_min_observations
+                tracks = [
+                    track for track in bundle.tracks_for("A", prefer_long=False)
+                    if len(track.raw.timeframe) >= minimum
+                ]
+                return sum(track.raw.timeframe[0] == 0 for track in tracks)
+
+            self.assertEqual(first_frame_arrivals(unfiltered), 20)
+            self.assertEqual(first_frame_arrivals(filtered), 0)
+
+    def _trajectory_bundle(self):
+        from celltrack.analysis.compute import prepare_analysis
+
+        temporary = tempfile.mkdtemp()
+        sources = []
+        for name, scale in (("A", 1.0), ("B", 3.0)):
+            csv_path = Path(temporary) / f"{name}.csv"
+            rows = ["track_id,timeframe,x,y,polygon"]
+            for track_id in range(1, 13):
+                for frame in range(12):
+                    rows.append(f"{track_id},{frame},{frame * scale * track_id},{frame * scale},")
+            csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+            sources.append((name, [(f"sample-{name}", csv_path)]))
+        return prepare_analysis(sources, AnalysisParameters(
+            long_track_min_observations=3,
+            representatives_per_type=2,
+            figure_types=["representatives", "group_trajectories"],
+        ))
 
     def test_bundle_trajectory_and_polar_scales_are_shared(self):
         from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack, TrackSummary

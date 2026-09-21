@@ -1,5 +1,5 @@
 import { state, escapeHtml } from "./state.js?v=5";
-import { formatText } from "./strings.js?v=4";
+import { formatText } from "./strings.js?v=6";
 
 let openViewer = () => {};
 
@@ -108,7 +108,7 @@ export function renderWorkflow() {
   document.querySelector("#datasetList").innerHTML = datasets.map(dataset => `<div class="dataset-row ${state.selected.has(dataset.id) ? "selected" : ""}">
     <input class="dataset-check" type="checkbox" data-id="${dataset.id}" aria-label="${escapeHtml(dataset.name)}" ${state.selected.has(dataset.id) ? "checked" : ""}>
     <span class="dataset-name"><img src="${dataset.preview_url}" width="48" height="48" loading="lazy" alt=""><span><strong>${escapeHtml(dataset.name)}</strong><small>${escapeHtml(dataset.group_path || "Datasets")}</small></span></span>
-    <span class="image-count">${dataset.image_count}</span><span class="status-stack">${badge(dataset, "segmentation")}${badge(dataset, "tracking")}</span></div>`).join("");
+    <span class="image-count">${dataset.image_count}${dataset.duplicate_image_count ? `<span class="duplicate-note" title="${formatText("duplicateFramesHint")}">${formatText("duplicateFrames", { count: dataset.duplicate_image_count })}</span>` : ""}</span><span class="status-stack">${badge(dataset, "segmentation")}${badge(dataset, "tracking")}</span></div>`).join("");
   document.querySelector("#datasetEmpty").hidden = datasets.length > 0;
   document.querySelectorAll(".dataset-check").forEach(input => input.addEventListener("change", () => { input.checked ? state.selected.add(input.dataset.id) : state.selected.delete(input.dataset.id); renderWorkflow(); }));
   document.querySelectorAll(".result-badge").forEach(button => button.addEventListener("click", () => openViewer(button.dataset.id, button.dataset.kind)));

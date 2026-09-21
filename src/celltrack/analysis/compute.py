@@ -91,15 +91,6 @@ class MsdSummaryPoint:
 
 
 @dataclass(frozen=True)
-class TurningAngleDistributionPoint:
-    angle_degrees: float
-    mean_density: float
-    ci_low: float | None
-    ci_high: float | None
-    n: int
-
-
-@dataclass(frozen=True)
 class StatisticalResult:
     metric: str
     test: str
@@ -342,18 +333,14 @@ def msd_summary(
     prefer_long: bool = True,
     filter_sparse_tail: bool = True,
 ) -> tuple[MsdSummaryPoint, ...]:
-    """Aggregate track MSD within datasets, then calculate a group-level 95% CI."""
+    """Aggregate per-track MSD values with a two-sided 95% Student-t CI."""
     series_list = bundle.msd_for(group, prefer_long)
-    datasets = {series.dataset for series in series_list}
-    by_dataset_lag: dict[tuple[str, float], list[float]] = {}
+    by_lag: dict[float, list[float]] = {}
     for series in series_list:
         for lag, value in zip(series.lag_frames, series.values):
             if math.isfinite(lag) and math.isfinite(value) and value >= 0:
-                by_dataset_lag.setdefault((series.dataset, float(lag)), []).append(float(value))
-    by_lag: dict[float, list[float]] = {}
-    for (_dataset, lag), values in by_dataset_lag.items():
-        by_lag.setdefault(lag, []).append(statistics.fmean(values))
-    minimum = max(1, math.ceil(0.5 * len(datasets))) if filter_sparse_tail else 1
+                by_lag.setdefault(float(lag), []).append(float(value))
+    minimum = min(len(series_list), max(3, math.ceil(0.2 * len(series_list)))) if filter_sparse_tail else 1
     time_scale = bundle.parameters.frame_interval_minutes or 1.0
     distance_scale = (bundle.parameters.microns_per_pixel or 1.0) ** 2
     points: list[MsdSummaryPoint] = []
@@ -378,6 +365,15 @@ def msd_summary(
     return tuple(points)
 
 
+def _finite_metric_values(bundle: AnalysisBundle, group: str, metric: str) -> list[float]:
+    """Return one value per track, for the distribution drawn underneath the points."""
+    return [
+        float(value)
+        for item in bundle.summaries_for(group, True)
+        if math.isfinite(value := float(getattr(item, metric)))
+    ]
+
+
 def dataset_metric_values(
     bundle: AnalysisBundle,
     group: str,
@@ -395,46 +391,6 @@ def dataset_metric_values(
         for dataset, values in sorted(by_dataset.items())
         if values
     )
-
-
-def turning_angle_distribution(
-    bundle: AnalysisBundle,
-    group: str,
-    prefer_long: bool = True,
-) -> tuple[TurningAngleDistributionPoint, ...]:
-    """Return an equally weighted dataset summary over 18 bins from 0 to 180 degrees."""
-    edges = np.linspace(0.0, 180.0, 19)
-    histograms: list[np.ndarray] = []
-    by_dataset: dict[str, list[float]] = {}
-    for track in bundle.tracks_for(group, prefer_long):
-        by_dataset.setdefault(track.raw.dataset, []).extend(
-            value for value in track.raw.turning_angle if math.isfinite(value) and 0.0 <= value <= 180.0
-        )
-    for values in by_dataset.values():
-        if values:
-            histogram, _ = np.histogram(values, bins=edges, density=True)
-            histograms.append(histogram.astype(float))
-    if not histograms:
-        return ()
-
-    matrix = np.vstack(histograms)
-    means = np.mean(matrix, axis=0)
-    result: list[TurningAngleDistributionPoint] = []
-    for index, mean in enumerate(means):
-        low: float | None = None
-        high: float | None = None
-        if len(histograms) > 1:
-            sem = float(np.std(matrix[:, index], ddof=1) / math.sqrt(len(histograms)))
-            margin = float(stats.t.ppf(0.975, len(histograms) - 1)) * sem
-            low, high = float(mean) - margin, float(mean) + margin
-        result.append(TurningAngleDistributionPoint(
-            angle_degrees=float((edges[index] + edges[index + 1]) / 2),
-            mean_density=float(mean),
-            ci_low=low,
-            ci_high=high,
-            n=len(histograms),
-        ))
-    return tuple(result)
 
 
 def _holm_adjust(p_values: list[float]) -> list[float]:

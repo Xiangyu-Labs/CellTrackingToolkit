@@ -1,6 +1,6 @@
 import { api } from "./api.js?v=2";
 import { escapeHtml } from "./state.js?v=5";
-import { formatText } from "./strings.js?v=4";
+import { formatText } from "./strings.js?v=6";
 
 function formatParameters(parameters) {
   parameters = parameters || {};

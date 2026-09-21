@@ -70,6 +70,10 @@ def write_executable(path: Path, content: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+@unittest.skipIf(
+    sys.platform == "win32" or shutil.which("sh") is None,
+    "start.sh needs a POSIX shell; bootstrap.ps1 covers Windows",
+)
 class StartScriptPlatformGuardTest(unittest.TestCase):
     """A project folder copied between platforms must repair itself.
 

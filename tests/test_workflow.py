@@ -468,7 +468,10 @@ class AnalysisTests(unittest.TestCase):
         figures._plot_cell_appearance_axes(bundle, axes[0])
         cumulative, new = axes[0, 0].lines[0], axes[0, 2].lines[0]
         self.assertEqual(cumulative.get_ydata()[0], 20)
-        self.assertEqual(list(new.get_xdata()), list(range(1, 10)))
+        # Tracks end by frame 9; with 5 observations required, frame 5 is the
+        # last one where a new arrival could still be counted.
+        self.assertEqual(list(new.get_xdata()), list(range(1, 6)))
+        self.assertEqual(axes[0, 1].lines[0].get_xdata()[-1], 5)
         self.assertEqual(max(new.get_ydata()), 1)
         figures.plt.close(fig)
 

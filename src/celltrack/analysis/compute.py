@@ -190,13 +190,15 @@ def _load_raw_tracks(csv_path: Path, dataset: str) -> tuple[RawTrack, ...]:
         if not len(timeframe):
             continue
 
-        step = np.zeros(len(x), dtype=float)
-        speed = np.zeros(len(x), dtype=float)
+        # A track's first observation has no step yet: NaN keeps it out of the
+        # per-frame means instead of pulling them towards zero.
+        step = np.full(len(x), np.nan, dtype=float)
+        speed = np.full(len(x), np.nan, dtype=float)
         if len(x) > 1:
             step[1:] = np.hypot(np.diff(x), np.diff(y))
             frame_delta = np.maximum(1.0, np.diff(timeframe))
             speed[1:] = step[1:] / frame_delta
-        path = np.cumsum(step)
+        path = np.cumsum(np.nan_to_num(step))
         net = np.hypot(x - x[0], y - y[0])
         directionality = np.divide(net, path, out=np.full_like(net, np.nan), where=path > 0)
         directionality = np.clip(directionality, 0.0, 1.0)
@@ -251,7 +253,7 @@ def _classify(directionality: float, parameters: AnalysisParameters) -> str:
 def _summarize(track: GroupedTrack, parameters: AnalysisParameters) -> TrackSummary:
     raw = track.raw
     frame_span = max(1, raw.timeframe[-1] - raw.timeframe[0])
-    total_path = sum(raw.step_distance)
+    total_path = math.fsum(value for value in raw.step_distance if math.isfinite(value))
     net = raw.net_displacement[-1]
     directionality = float(np.clip(net / total_path, 0.0, 1.0)) if total_path else 0.0
     turning = [value for value in raw.turning_angle if math.isfinite(value)]

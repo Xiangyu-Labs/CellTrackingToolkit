@@ -140,10 +140,18 @@ def _plot_cell_appearance_axes(bundle, axes) -> None:
     Counting them as new tracks turns the first point of "New tracks" into a
     spike the size of the starting population, so that panel starts one frame
     later. The cumulative and active panels keep the first frame.
+
+    A track that starts in the last ``minimum - 1`` frames can never reach
+    ``minimum`` observations, so those frames would show arrivals falling to
+    zero and active tracks collapsing. That is the end of the movie, not the
+    cells, so every panel stops at the last frame where an arrival can still
+    be counted.
     """
     minimum = bundle.parameters.appearance_min_observations
     starts = [track.raw.timeframe[0] for track in bundle.tracks if len(track.raw.timeframe)]
+    ends = [track.raw.timeframe[-1] for track in bundle.tracks if len(track.raw.timeframe)]
     first_imaged = min(starts) if starts else 0
+    last_countable = (max(ends) if ends else 0) - (minimum - 1)
     for index, group in enumerate(bundle.groups):
         tracks = [
             track for track in bundle.tracks_for(group, prefer_long=False)
@@ -153,7 +161,7 @@ def _plot_cell_appearance_axes(bundle, axes) -> None:
         last = [track.raw.timeframe[-1] for track in tracks]
         if not first:
             continue
-        frames = np.arange(min(first), max(last) + 1)
+        frames = np.arange(min(first), max(min(first), min(max(last), last_countable)) + 1)
         new = np.asarray([sum(value == frame for value in first) for frame in frames])
         values_set = (np.cumsum(new), np.asarray([sum(start <= frame <= end for start, end in zip(first, last)) for frame in frames]), new)
         arriving = frames > first_imaged
@@ -584,7 +592,11 @@ def _plot_classification_axes(bundle, axes) -> None:
     axes[0].set_xticks(x, bundle.groups, rotation=20, ha="right")
     axes[0].set_ylabel("Tracks (%)")
     axes[0].set_title("Composition", fontsize=9.5)
-    axes[0].legend(frameon=False, fontsize=8)
+    # The bars fill 0-100 %, so the legend gets its own strip above them.
+    axes[0].set_ylim(0, 114)
+    axes[0].set_yticks(range(0, 101, 20))
+    axes[0].spines["left"].set_bounds(0, 100)
+    axes[0].legend(loc="upper center", ncol=len(types), frameon=False, fontsize=8, handlelength=1.2, columnspacing=1.0)
     _style(axes[0])
     _plot_metric_distribution(axes[1], bundle, "directionality", "Directionality distribution")
     axes[1].set_ylabel("Directionality")

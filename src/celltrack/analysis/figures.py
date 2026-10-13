@@ -146,6 +146,11 @@ def _plot_cell_appearance_axes(bundle, axes) -> None:
     zero and active tracks collapsing. That is the end of the movie, not the
     cells, so every panel stops at the last frame where an arrival can still
     be counted.
+
+    Groups can hold different numbers of samples, so a group total would let
+    the group with more samples look like it has more cells. Each panel shows
+    the per-sample mean with its SEM; a sample whose tracks are all too short
+    still counts, as zero.
     """
     minimum = bundle.parameters.appearance_min_observations
     starts = [track.raw.timeframe[0] for track in bundle.tracks if len(track.raw.timeframe)]
@@ -153,33 +158,42 @@ def _plot_cell_appearance_axes(bundle, axes) -> None:
     first_imaged = min(starts) if starts else 0
     last_countable = (max(ends) if ends else 0) - (minimum - 1)
     for index, group in enumerate(bundle.groups):
-        tracks = [
-            track for track in bundle.tracks_for(group, prefer_long=False)
-            if len(track.raw.timeframe) >= minimum
-        ]
-        first = [track.raw.timeframe[0] for track in tracks]
-        last = [track.raw.timeframe[-1] for track in tracks]
-        if not first:
+        group_tracks = bundle.tracks_for(group, prefer_long=False)
+        samples = sorted({track.raw.dataset for track in group_tracks})
+        tracks = [track for track in group_tracks if len(track.raw.timeframe) >= minimum]
+        if not tracks:
             continue
-        frames = np.arange(min(first), max(min(first), min(max(last), last_countable)) + 1)
-        new = np.asarray([sum(value == frame for value in first) for frame in frames])
-        values_set = (np.cumsum(new), np.asarray([sum(start <= frame <= end for start, end in zip(first, last)) for frame in frames]), new)
+        start = min(track.raw.timeframe[0] for track in tracks)
+        end = max(start, min(max(track.raw.timeframe[-1] for track in tracks), last_countable))
+        frames = np.arange(start, end + 1)
+        per_sample = np.zeros((3, len(samples), len(frames)))
+        for row, sample in enumerate(samples):
+            spans = [(track.raw.timeframe[0], track.raw.timeframe[-1]) for track in tracks if track.raw.dataset == sample]
+            new = np.asarray([sum(first == frame for first, _last in spans) for frame in frames], dtype=float)
+            per_sample[0, row] = np.cumsum(new)
+            per_sample[1, row] = [sum(first <= frame <= last for first, last in spans) for frame in frames]
+            per_sample[2, row] = new
+        mean = per_sample.mean(axis=1)
+        sem = per_sample.std(axis=1, ddof=1) / math.sqrt(len(samples)) if len(samples) > 1 else np.zeros_like(mean)
         arriving = frames > first_imaged
         panels = (
-            (frames, values_set[0], "Cumulative appeared"),
-            (frames, values_set[1], "Active tracks"),
-            (frames[arriving], values_set[2][arriving], "New tracks (after first frame)"),
+            (np.ones_like(arriving), "Cumulative appeared"),
+            (np.ones_like(arriving), "Active tracks"),
+            (arriving, "New tracks (after first frame)"),
         )
-        for ax, (x_values, values, label) in zip(axes, panels):
-            ax.plot(x_values, values, color=COLORS[index % len(COLORS)], linestyle=LINE_STYLES[index % len(LINE_STYLES)], linewidth=1.8, label=group)
+        color = COLORS[index % len(COLORS)]
+        for panel, (ax, (shown, label)) in enumerate(zip(axes, panels)):
+            x_values, values, spread = frames[shown], mean[panel][shown], sem[panel][shown]
+            ax.plot(x_values, values, color=color, linestyle=LINE_STYLES[index % len(LINE_STYLES)], linewidth=1.8, label=group)
+            ax.fill_between(x_values, values - spread, values + spread, color=color, alpha=0.12, linewidth=0)
             ax.set_title(label, fontsize=11)
             ax.set_xlabel("Frame", fontsize=9)
-            ax.set_ylabel("Track count", fontsize=9)
+            ax.set_ylabel("Tracks per sample", fontsize=9)
             _style(ax)
 
 
 def _appearance_subtitle(bundle) -> str:
-    return f"tracks with at least {bundle.parameters.appearance_min_observations} observations"
+    return f"mean ± SEM per sample; tracks with at least {bundle.parameters.appearance_min_observations} observations"
 
 
 def figure_cell_appearance(bundle) -> bytes:

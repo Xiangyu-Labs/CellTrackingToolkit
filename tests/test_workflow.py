@@ -475,6 +475,32 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(max(new.get_ydata()), 1)
         figures.plt.close(fig)
 
+    def test_cell_appearance_is_a_per_sample_mean(self):
+        """Unequal group sizes: a group total would favour the group with more samples."""
+        from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack
+
+        def track(group, sample, track_id, length):
+            frames = tuple(range(0, length))
+            return GroupedTrack(group, RawTrack(
+                sample, track_id, frames, tuple(float(f) for f in frames), tuple(float(f) for f in frames),
+                (), (), (), (), (), (), (), (), (), (),
+            ))
+
+        tracks = (
+            tuple(track("A", "a1", index, 10) for index in range(2))
+            + tuple(track("A", "a2", index, 10) for index in range(4))
+            + (track("A", "a3", 0, 2),)  # too short to count: this sample adds a zero
+            + tuple(track("B", f"b{index}", 0, 10) for index in range(9))
+        )
+        bundle = AnalysisBundle(("A", "B"), tracks, (), (), 0, AnalysisParameters(figure_types=["cell_appearance"]))
+        fig, axes = figures._figure(1, 3)
+        figures._plot_cell_appearance_axes(bundle, axes[0])
+        active_a, active_b = axes[0, 1].lines
+        self.assertEqual(active_a.get_ydata()[0], 2)
+        self.assertEqual(active_b.get_ydata()[0], 1)
+        self.assertEqual(axes[0, 1].get_ylabel(), "Tracks per sample")
+        figures.plt.close(fig)
+
     def test_every_trajectory_panel_uses_the_shared_bundle_scale(self):
         """The axis-range complaint: panels must not each pick their own scale."""
         bundle = self._trajectory_bundle()

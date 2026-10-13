@@ -5,6 +5,8 @@ workflow replaces that heading with the version number and release time.
 
 ## Unreleased
 
+## 2.0.16 — 2026-10-13 19:24 (UTC+8)
+
 - Added an Updates tab that lists what changed in each version.
 
 ## 2.0.15 — 2026-10-13 19:08 (UTC+8)

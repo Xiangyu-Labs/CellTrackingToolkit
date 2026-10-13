@@ -1,0 +1,9 @@
+*
+!pyproject.toml
+!uv.lock
+!VERSION
+!run.py
+!src/
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store

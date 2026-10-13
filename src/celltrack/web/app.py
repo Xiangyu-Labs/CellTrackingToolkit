@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from celltrack import __version__
 from celltrack.analysis.storage import AnalysisNotFoundError, analysis_store
+from celltrack.web.access import require_access_token
 from celltrack.web.routes import analysis, datasets, jobs
 
 
@@ -31,6 +32,10 @@ async def prevent_web_asset_caching(
     if path == "/" or path.startswith(("/analysis/", "/static/")):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+# Registered last so it wraps everything else, including static files.
+app.middleware("http")(require_access_token)
 
 
 @app.get("/api/health")

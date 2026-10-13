@@ -49,6 +49,17 @@ or run:
 ./start.sh
 ```
 
+### Server (Docker)
+
+The `Dockerfile` builds a server image without the automatic updater. Mount
+`Datasets/`, `workspace/`, and `models/` at `/app/Datasets`, `/app/workspace`,
+and `/app/models`, and publish port 8000.
+
+When the server is reachable from the internet, set `CELLTRACK_ACCESS_TOKEN`
+to a long random value. Every request is then refused with `403` unless it
+carries the token: open `https://<host>/?token=<value>` once, and the browser
+keeps a cookie for 30 days.
+
 ## Add datasets
 
 Put each image sequence in its own folder inside `Datasets/`:

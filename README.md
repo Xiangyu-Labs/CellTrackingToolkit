@@ -85,10 +85,10 @@ Application updates do not replace or delete `Datasets/`, `models/`, or
 ## Analysis methods
 
 Every figure type is exported by default: cell appearance, temporal trends
-(long tracks and all tracks), trajectory classification, turning-angle
-variability distribution, MSD (long tracks, all tracks, and the standalone MSD
-summary), representative trajectories, group trajectory analysis, and a 3 x 3
-grid of parameter distributions. Figure filenames are numbered in a fixed
+(long tracks and all tracks), trajectory classification, step turning-angle
+distribution, MSD (long tracks, all tracks, and the standalone MSD summary),
+representative trajectories, group trajectory analysis, and a 3 x 3 grid of
+dataset-level parameter distributions. Figure filenames are numbered in a fixed
 canonical order, so a given figure keeps its `figure_NN_` prefix no matter
 which other figures are selected. New analyses also include paper-ready
 composite PNGs whenever their component figures are selected; existing results
@@ -98,12 +98,12 @@ The temporal grid and the parameter-distribution grid are paired: panel *i* on
 the left of `paper_02` shows the per-frame trend for the same quantity that
 panel *i* on the right summarises per track. Both grids are 3 x 3.
 
-Parameter distributions are drawn as SuperPlots. The violin shows the
-distribution over individual tracks, and the large outlined points are the mean
-of each dataset. Statistics are computed on those dataset means, so each
-dataset counts as one independent experimental replicate regardless of how many
-tracks it contributed. Axis labels report both counts as
-`n=<tracks> (<datasets>)`.
+Each dataset is treated as one independent experimental replicate. Tracks
+within a dataset are technical observations: track-level metrics are averaged
+within each dataset before group-level inference, and each dataset receives
+equal weight regardless of its track count. Parameter distributions show one
+point per dataset with a box over those points, so what is plotted is exactly
+what is tested.
 
 Two-group comparisons use a two-sided Mann-Whitney U test. Comparisons with
 three or more groups use a Kruskal-Wallis test plus pairwise two-sided
@@ -126,10 +126,14 @@ are excluded from temporal means. Final displacement angle plots report each
 bin as a percentage of valid tracks in that group, with one shared radial scale
 across groups.
 
-MSD is pooled across every track at each lag and shown as the mean with its
-standard error; the standalone MSD summary additionally reports a two-sided 95%
-Student-t confidence interval and stops when fewer than 20% of the group's
-tracks contribute to a lag. Curves are not smoothed or forced to be monotonic.
+MSD is averaged first across tracks within each dataset and then across
+datasets. Curves show a two-sided 95% Student-t confidence interval and stop
+when fewer than half of the group's datasets contribute to a lag. Curves are
+not smoothed or forced to be monotonic.
+
+The step turning-angle distribution histograms every step turning angle into
+18 bins from 0 to 180 degrees per dataset, then shows the mean density across
+datasets with a 95% confidence interval.
 
 All trajectory panels share one spatial scale, computed across every selected
 group, so representative tracks and centred trajectories can be compared
@@ -138,7 +142,9 @@ figure title.
 
 The cell-appearance figure counts only tracks with at least
 `appearance_min_observations` observations (default 5), which keeps one- and
-two-frame detections from appearing as a spike of arrivals on the first frame.
+two-frame detections out of the counts. The "New tracks" panel starts after the
+first imaged frame, because cells already present when imaging starts are not
+arrivals.
 
 Frames that are byte-identical copies of an earlier frame in the same folder
 (for example `frame_001 (1).tif` next to `frame_001.tif`) are excluded from the

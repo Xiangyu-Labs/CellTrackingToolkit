@@ -406,8 +406,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNone(points[0].ci_low)
         self.assertIsNone(points[0].ci_high)
 
-    def test_msd_summary_pools_every_track_at_each_lag(self):
-        """Each track is one sample, as in the version the figure review approved."""
+    def test_msd_summary_averages_tracks_within_each_dataset_first(self):
         from celltrack.analysis.compute import GroupedTrack, MsdSeries, RawTrack, msd_summary
 
         def track(dataset, track_id):
@@ -426,27 +425,52 @@ class AnalysisTests(unittest.TestCase):
             ("A",), tracks, (), series, 0, AnalysisParameters(figure_types=["msd_summary"]),
         )
         points = msd_summary(bundle, "A")
-        self.assertAlmostEqual(points[0].mean, 140.0 / 3)
-        self.assertEqual(points[0].n, 3)
+        self.assertEqual(points[0].mean, 60.0)
+        self.assertEqual(points[0].n, 2)
 
-    def test_turning_angle_figure_uses_per_track_variability(self):
-        """The figure is back to the per-track std KDE over a data-driven range."""
-        from celltrack.analysis.compute import AnalysisBundle, TrackSummary
+    def test_turning_angle_distribution_weights_datasets_equally(self):
+        from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack, turning_angle_distribution
 
-        def summary(track_id, std):
-            return TrackSummary(
-                "A", "sample", track_id, 60, 0, 59, 100.0, 1.0, 50.0, 0.5,
-                80.0, std, 10.0, 12.0, 1.2, 0.9, 0.1, "Mixed", 0.3,
-            )
+        def track(dataset, track_id, turning):
+            return GroupedTrack("A", RawTrack(
+                dataset, track_id, tuple(range(50)), tuple(range(50)), tuple(range(50)),
+                (), (), (), (), tuple(turning), (), (), (), (), (),
+            ))
 
-        summaries = tuple(summary(index, 40.0 + index) for index in range(1, 11))
+        tracks = (
+            track("short", 1, [5.0]),
+            track("long", 2, [175.0] * 100),
+        )
         bundle = AnalysisBundle(
-            ("A",), (), summaries, (), 0,
+            ("A",), tracks, (), (), 0,
             AnalysisParameters(figure_types=["turning_angle_distribution"]),
         )
-        image = figures.figure_turning_angle_distribution(bundle)
-        self.assertTrue(image.startswith(b"\x89PNG\r\n\x1a\n"))
-        self.assertFalse(hasattr(analysis, "turning_angle_distribution"))
+        points = turning_angle_distribution(bundle, "A")
+        self.assertEqual(len(points), 18)
+        self.assertEqual(points[0].angle_degrees, 5.0)
+        self.assertAlmostEqual(points[0].mean_density, 0.05)
+        self.assertAlmostEqual(points[-1].mean_density, 0.05)
+        self.assertEqual(points[0].n, 2)
+
+    def test_new_tracks_panel_skips_cells_present_on_the_first_frame(self):
+        from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, RawTrack
+
+        def track(track_id, start):
+            frames = tuple(range(start, start + 6))
+            return GroupedTrack("A", RawTrack(
+                "sample", track_id, frames, tuple(float(f) for f in frames), tuple(float(f) for f in frames),
+                (), (), (), (), (), (), (), (), (), (),
+            ))
+
+        tracks = tuple(track(index, 0) for index in range(1, 21)) + (track(21, 3), track(22, 4))
+        bundle = AnalysisBundle(("A",), tracks, (), (), 0, AnalysisParameters(figure_types=["cell_appearance"]))
+        fig, axes = figures._figure(1, 3)
+        figures._plot_cell_appearance_axes(bundle, axes[0])
+        cumulative, new = axes[0, 0].lines[0], axes[0, 2].lines[0]
+        self.assertEqual(cumulative.get_ydata()[0], 20)
+        self.assertEqual(list(new.get_xdata()), list(range(1, 10)))
+        self.assertEqual(max(new.get_ydata()), 1)
+        figures.plt.close(fig)
 
     def test_every_trajectory_panel_uses_the_shared_bundle_scale(self):
         """The axis-range complaint: panels must not each pick their own scale."""

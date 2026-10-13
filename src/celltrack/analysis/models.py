@@ -57,7 +57,7 @@ FIGURE_TYPES = {
     "cell_appearance": "Cell appearance",
     "temporal_long": "Temporal trends (long tracks)",
     "classification": "Trajectory classification",
-    "turning_angle_distribution": "Turning-angle variability distribution",
+    "turning_angle_distribution": "Step turning-angle distribution",
     "msd_long": "Mean square displacement (long tracks)",
     "msd_summary": "MSD comparison (mean ± 95% CI)",
     "representatives": "Representative trajectories for each group",

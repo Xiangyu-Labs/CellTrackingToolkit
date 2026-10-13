@@ -20,6 +20,14 @@
 .parameter-grid { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 12px; margin: 14px 0; }
 .option-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 8px 16px; }
 .history { margin-top: 28px; }
+.updates-intro { max-width: 760px; margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.changelog { max-width: 760px; display: grid; gap: 12px; }
+.release { padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.release header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; }
+.release h2 { margin: 0; font-size: 16px; }
+.release-badge { padding: 2px 8px; color: var(--primary-dark); background: #eef8f5; border: 1px solid #b9dcd3; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.release-date { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.release ul { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; }
 .history h2 { font-size: 16px; }
 .result-dialog { width: min(1100px, calc(100vw - 32px)); border: 0; border-radius: var(--radius); padding: 0; box-shadow: var(--shadow); }
 .result-dialog::backdrop { background: rgba(8, 22, 19, .68); }
@@ -39,6 +47,7 @@
 @media (max-width: 620px) {
   .top-tabs { padding-left: 0; }
   .main-content { padding: 74px 10px 168px; }
+  .release-date { flex-basis: 100%; margin-left: 0; }
   .toolbar { align-items: stretch; flex-wrap: wrap; }
   .search-field { flex-basis: 100%; min-width: 0; }
   .filter-menu { width: 100%; }

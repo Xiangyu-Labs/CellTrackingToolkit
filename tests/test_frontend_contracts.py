@@ -25,7 +25,7 @@ class FrontendContractTests(unittest.TestCase):
             self.assertIsNotNone(match, f"{module} must import the shared state module")
             state_urls.append(match.group(1))
 
-        self.assertEqual(state_urls, ["./state.js?v=5"] * 3)
+        self.assertEqual(state_urls, ["./state.js?v=6"] * 3)
 
     def test_navigation_uses_process_and_analysis_tabs(self):
         index = self.read_static("index.html")
@@ -34,9 +34,10 @@ class FrontendContractTests(unittest.TestCase):
 
         self.assertIn('data-tab="process"', index)
         self.assertIn('data-tab="analysis"', index)
+        self.assertIn('data-tab="updates"', index)
         self.assertNotIn('data-tab="compare"', index)
         self.assertNotIn('class="sidebar"', index)
-        self.assertIn('new Set(["process", "analysis"])', state)
+        self.assertIn('new Set(["process", "analysis", "updates"])', state)
         self.assertNotIn('"compare"', state)
         self.assertIn('href="/?tab=analysis"', result)
 
@@ -46,12 +47,12 @@ class FrontendContractTests(unittest.TestCase):
 
         for asset in (
             "/static/css/components.css?v=8",
-            "/static/css/layout.css?v=7",
-            "/static/js/app.js?v=17",
+            "/static/css/layout.css?v=8",
+            "/static/js/app.js?v=18",
         ):
             self.assertIn(asset, index)
-        self.assertIn('"./workflow.js?v=11"', app)
-        self.assertIn('"./compare.js?v=11"', app)
+        self.assertIn('"./workflow.js?v=12"', app)
+        self.assertIn('"./compare.js?v=12"', app)
         self.assertIn('"./strings.js?v=6"', app)
 
     def test_result_viewer_has_download_links_and_updates_frame_url(self):
@@ -81,8 +82,8 @@ class WebCacheTests(unittest.TestCase):
         for path in (
             "/",
             "/analysis/tasks/pending",
-            "/static/js/app.js?v=17",
-            "/static/css/layout.css?v=7",
+            "/static/js/app.js?v=18",
+            "/static/css/layout.css?v=8",
         ):
             with self.subTest(path=path):
                 response = client.get(path)

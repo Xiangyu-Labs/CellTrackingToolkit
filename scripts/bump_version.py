@@ -6,9 +6,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import re
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from celltrack.changelog import stamp_release  # noqa: E402
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -39,6 +43,7 @@ def bump_patch(root: Path = ROOT) -> str:
         f'__version__ = "{current}"',
         f'__version__ = "{version}"',
     )
+    stamp_release(root / "CHANGELOG.md", version)
     return version
 
 

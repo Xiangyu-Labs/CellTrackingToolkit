@@ -57,6 +57,43 @@ class VersionBumpTests(unittest.TestCase):
                 (package / "__init__.py").read_text(encoding="utf-8"),
             )
 
+    def test_release_stamps_unreleased_changelog_entries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "src" / "celltrack"
+            package.mkdir(parents=True)
+            (root / "VERSION").write_text("2.0.2\n", encoding="utf-8")
+            (root / "pyproject.toml").write_text('version = "2.0.2"\n', encoding="utf-8")
+            (package / "__init__.py").write_text('__version__ = "2.0.2"\n', encoding="utf-8")
+            (root / "CHANGELOG.md").write_text(
+                "# Changelog\n\n## Unreleased\n\n- New thing.\n\n"
+                "## 2.0.2 — 2026-08-13 16:32 (UTC+8)\n\n- Old thing.\n",
+                encoding="utf-8",
+            )
+
+            bump_version.bump_patch(root)
+
+            changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+            self.assertRegex(
+                changelog,
+                r"## Unreleased\n\n## 2\.0\.3 — \d{4}-\d\d-\d\d \d\d:\d\d \(UTC\+8\)\n\n- New thing\.",
+            )
+
+    def test_release_without_unreleased_changes_leaves_changelog_alone(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "src" / "celltrack"
+            package.mkdir(parents=True)
+            (root / "VERSION").write_text("2.0.2\n", encoding="utf-8")
+            (root / "pyproject.toml").write_text('version = "2.0.2"\n', encoding="utf-8")
+            (package / "__init__.py").write_text('__version__ = "2.0.2"\n', encoding="utf-8")
+            original = "# Changelog\n\n## Unreleased\n\n## 2.0.2 — 2026-08-13 16:32 (UTC+8)\n\n- Old.\n"
+            (root / "CHANGELOG.md").write_text(original, encoding="utf-8")
+
+            bump_version.bump_patch(root)
+
+            self.assertEqual((root / "CHANGELOG.md").read_text(encoding="utf-8"), original)
+
     def test_invalid_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

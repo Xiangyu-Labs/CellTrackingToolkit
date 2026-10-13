@@ -1,4 +1,4 @@
-import { state, escapeHtml } from "./state.js?v=5";
+import { state, escapeHtml } from "./state.js?v=6";
 import { formatText } from "./strings.js?v=6";
 
 const numericFields = [

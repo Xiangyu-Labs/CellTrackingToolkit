@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from celltrack import __version__
 from celltrack.analysis.storage import AnalysisNotFoundError, analysis_store
+from celltrack.changelog import load_changelog
 from celltrack.web.access import require_access_token
 from celltrack.web.routes import analysis, datasets, jobs
 
@@ -45,6 +46,11 @@ def health() -> dict[str, str]:
         "app": "cell-tracking-studio",
         "version": __version__,
     }
+
+
+@app.get("/api/changelog")
+def changelog() -> list[dict]:
+    return load_changelog()
 
 
 @app.get("/")

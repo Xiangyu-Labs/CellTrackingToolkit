@@ -6,7 +6,7 @@
   <title>Cell Tracking Studio</title>
   <link rel="stylesheet" href="/static/css/tokens.css?v=3">
   <link rel="stylesheet" href="/static/css/components.css?v=8">
-  <link rel="stylesheet" href="/static/css/layout.css?v=7">
+  <link rel="stylesheet" href="/static/css/layout.css?v=8">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -14,6 +14,7 @@
     <nav class="top-tabs" aria-label="Workflow">
       <button class="top-tab" type="button" data-tab="process">Process</button>
       <button class="top-tab" type="button" data-tab="analysis">Analysis</button>
+      <button class="top-tab" type="button" data-tab="updates">Updates</button>
     </nav>
 
     <main id="main" class="main-content" tabindex="-1">
@@ -79,6 +80,12 @@
         <div class="action-bar compare-action"><p id="compareHint" role="status" aria-live="polite"></p><button class="button primary" id="analyzeButton" type="button" aria-busy="false" disabled><i data-lucide="chart-no-axes-combined"></i><span>Generate analysis</span></button></div>
         <section class="history" aria-labelledby="historyTitle"><h2 id="historyTitle">Analysis history</h2><div id="historyList"></div></section>
       </section>
+
+      <section id="updatesView" hidden>
+        <h1 class="sr-only">Updates</h1>
+        <p class="updates-intro">What changed in each version, newest first.</p>
+        <div id="changelogList" class="changelog" aria-live="polite"></div>
+      </section>
     </main>
   </div>
 
@@ -89,6 +96,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script type="module" src="/static/js/app.js?v=17"></script>
+  <script type="module" src="/static/js/app.js?v=18"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 import { api } from "./api.js?v=2";
 import { formatText } from "./strings.js?v=6";
-import { state, escapeHtml, setTabInUrl } from "./state.js?v=5";
-import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=11";
-import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=11";
+import { state, escapeHtml, setTabInUrl } from "./state.js?v=6";
+import { configureWorkflow, filteredDatasets, renderWorkflow } from "./workflow.js?v=12";
+import { addGroup, analysisRequest, initializeCompare, removeActiveGroup, renderCompare, visibleGroupDatasets } from "./compare.js?v=12";
 
 const $ = selector => document.querySelector(selector);
 const icons = () => window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
@@ -18,16 +18,36 @@ function toast(message) {
 function showTab(tab, updateUrl = true) {
   state.tab = tab;
   state.selected.clear();
-  $("#workflowView").hidden = tab === "analysis";
+  $("#workflowView").hidden = tab !== "process";
   $("#compareView").hidden = tab !== "analysis";
+  $("#updatesView").hidden = tab !== "updates";
   document.querySelectorAll(".top-tab").forEach(button => {
     const active = button.dataset.tab === tab;
     button.classList.toggle("active", active);
     active ? button.setAttribute("aria-current", "page") : button.removeAttribute("aria-current");
   });
   if (updateUrl) setTabInUrl(tab);
-  if (tab === "analysis") { renderCompare(); loadHistory(); } else renderWorkflow();
+  if (tab === "analysis") { renderCompare(); loadHistory(); }
+  else if (tab === "updates") loadChangelog();
+  else renderWorkflow();
   icons();
+}
+
+async function loadChangelog() {
+  const root = $("#changelogList");
+  if (root.dataset.loaded) return;
+  try {
+    const [releases, health] = await Promise.all([api("/api/changelog"), api("/api/health")]);
+    root.innerHTML = releases.map(release => {
+      const unreleased = release.version === "Unreleased";
+      const current = release.version === health.version;
+      const title = unreleased ? "Unreleased" : `Version ${escapeHtml(release.version)}`;
+      const badge = current ? '<span class="release-badge">Installed</span>' : "";
+      const when = unreleased ? "Not yet released" : escapeHtml(release.released || "");
+      return `<article class="release"><header><h2>${title}</h2>${badge}<span class="release-date">${when}</span></header><ul>${release.changes.map(change => `<li>${escapeHtml(change)}</li>`).join("")}</ul></article>`;
+    }).join("") || '<div class="empty-state">No changes recorded</div>';
+    root.dataset.loaded = "true";
+  } catch (error) { toast(error.message || formatText("requestFailed")); }
 }
 
 async function loadJobs() {
@@ -47,7 +67,7 @@ async function pollJobs() {
 function renderJobs() {
   const active = state.jobs.filter(job => ["queued", "running", "cancelling"].includes(job.status));
   const root = $("#jobBar");
-  root.hidden = !active.length || state.tab === "analysis";
+  root.hidden = !active.length || state.tab !== "process";
   root.innerHTML = active.map(job => `<div class="job-item"><span>${formatText("jobProgress", { kind: formatText(job.kind), dataset: `<strong>${escapeHtml(job.current_dataset || formatText("queued"))}</strong>`, progress: job.progress, total: job.total })}</span><button class="button secondary cancel-batch" data-id="${job.id}" type="button"><i data-lucide="square"></i>${formatText("cancelBatch")}</button></div>`).join("");
   root.querySelectorAll(".cancel-batch").forEach(button => button.addEventListener("click", async () => {
     if (!confirm(formatText("confirmCancel"))) return;
@@ -195,7 +215,7 @@ function bindEvents() {
   addEventListener("click", event => { if (!event.target.closest("#filterMenu")) $("#filterMenu").open = false; });
   addEventListener("popstate", () => {
     const requestedTab = new URL(location.href).searchParams.get("tab");
-    const tab = ["process", "analysis"].includes(requestedTab) ? requestedTab : "process";
+    const tab = ["process", "analysis", "updates"].includes(requestedTab) ? requestedTab : "process";
     showTab(tab, false);
     if (tab !== requestedTab) setTabInUrl(tab, true);
   });

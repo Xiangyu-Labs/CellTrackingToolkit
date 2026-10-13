@@ -1,4 +1,4 @@
-const allowedTabs = new Set(["process", "analysis"]);
+const allowedTabs = new Set(["process", "analysis", "updates"]);
 const requestedTab = new URL(location.href).searchParams.get("tab");
 
 export const state = {

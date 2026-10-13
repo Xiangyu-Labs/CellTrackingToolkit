@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HAN_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 ROOT_FILES = {
     "README.md",
+    "CHANGELOG.md",
     "start.sh",
     "start.command",
     "start.bat",

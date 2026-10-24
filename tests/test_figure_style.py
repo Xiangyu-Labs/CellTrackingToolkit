@@ -95,7 +95,10 @@ def _only(bundle, *figure_types):
 
 
 def _number(value) -> str:
-    return f"{float(value):.6g}"
+    # Rounding residue such as 5.55e-17 in rotated marker shapes differs
+    # between platforms' maths libraries; it is not data, so it counts as 0.
+    value = float(value)
+    return f"{0.0 if abs(value) < 1e-9 else value:.6g}"
 
 
 def _fingerprint(fig) -> str:

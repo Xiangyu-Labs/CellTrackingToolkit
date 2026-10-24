@@ -1,21 +1,21 @@
 {
-  "figure_01_cell_appearance.png": "4f56a3232dbb7fb8488dc5ea64d9db8ae9befe26e8f11df895c8bb205632b41b",
+  "figure_01_cell_appearance.png": "fa41607b0fbcf3596c237d398ef90db8f5516919290ffe2e34ddb79cf3e3c0ae",
   "figure_02_temporal_long.png": "f83f78ad4656073e00a50b5979bf75f9cb115b915e91eb6f9ba762780ecdc009",
   "figure_03_trajectory_classification.png": "21280bd3a30aea296797284b8f89341ce1296fd513320280ca4ce398f18186a5",
   "figure_04_turning_angle_distribution.png": "a5d3b1220fd0a68c81ae5ed63af5bc51a948a0a444dfc449036db349d68cac7d",
   "figure_05_msd_long.png": "15eb48a0e333ba0fb885131036abf8dc29a892aa9ed6d13c1925e27f52dee25f",
   "figure_06_msd_summary.png": "9f87f2cf679ff27a3601cd7cdf36a151e59029f6b792ded8454d875b0bfac6d9",
-  "figure_07_alpha_representatives.png": "b584687b5cdd3d93ef968e1a64a187bddfea6dabcd723c18e725d7b8a6bd9aba",
-  "figure_07_beta_representatives.png": "c734a596a530a038d1c28a6e314edfe15c65b54fb37b0002265687131c4d6950",
-  "figure_07_gamma_representatives.png": "ce147ada60e94880b38ba683f3984132c1c3daca33bde4481426841f4d8f9326",
+  "figure_07_alpha_representatives.png": "816030a26468a88eebefd18715c0233969da594f502a9dbbe492f4a13f47a6c6",
+  "figure_07_beta_representatives.png": "f98f565e7223cd617a495c2c6b66ae23e9069721d812edb0a214c692da782cc0",
+  "figure_07_gamma_representatives.png": "3508ce256bbb5317a4d2b3efc0d557d1edae8252359ae03f276e103340ae5317",
   "figure_08_temporal_all.png": "2037e07e3561c55c0de3713d48fe48d98291280bc0768fae89ede61c464f0317",
   "figure_09_msd_all.png": "fc2f10aa0ded8b558cc1dba66d998a33c2ea838e047231d5176a7dca1b34707e",
   "figure_10_alpha_trajectories.png": "1007187bcf0ef98fbbfa7859808cea412c601fc336e83c3c8893a141d68e272c",
   "figure_10_beta_trajectories.png": "5a4b710941f68e904087fe151a56592575e6299f6204f5fad12ddbb102f5faa7",
   "figure_10_gamma_trajectories.png": "69f432ca825068c3379e11fa16d34740b83c2c4b3196ebb8f659cac541dcb772",
   "figure_11_parameter_distributions.png": "a451d20d2ef0f71bd99a054b1531e73e2a5ffee3df8eb94929d73a26bff3c1e8",
-  "paper_01_cell_and_classification.png": "6b51b70135d093f70ae4409987bb84861ce4ebd1bf19d0d916f559a23cf348a3",
+  "paper_01_cell_and_classification.png": "bd4b0793c3ce47264b93765990237af1cbe998a97d061fbee2d3b05bfb758aa9",
   "paper_02_temporal_and_parameters.png": "956916f59f3470ef60178cec4b1a689b2bbb64472682bed21d8e463ebd3588e9",
   "paper_03_group_trajectories.png": "f0fe8ed02cec5dcc452e6551f795955185f5818767170b0e60ad8724d765168f",
-  "supplementary_01_representative_trajectories.png": "f0287db6352d9d75df179c6d05dad09fce182dee9b935c1d45ef085ea5bfaaca"
+  "supplementary_01_representative_trajectories.png": "3560820c2b6067403f9788b2dbaa5f8831a84853ee3a43e301e239f36646cfa1"
 }

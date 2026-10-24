@@ -9,10 +9,25 @@ import uuid
 import zipfile
 
 from celltrack.analysis.models import DEFAULT_ANALYSIS_PARAMETERS
+from celltrack.analysis.style import DEFAULT_FIGURE_STYLE
 from celltrack.settings import settings
 
 
 ANALYSIS_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+MEDIA_TYPES = {
+    ".png": "image/png",
+    ".tiff": "image/tiff",
+    ".pdf": "application/pdf",
+    ".svg": "image/svg+xml",
+}
+
+
+def media_type(filename: str) -> str:
+    return MEDIA_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
+
+
+def _alternate_name(filename: str, file_format: str) -> str:
+    return f"{filename.removesuffix('.png')}.{file_format}"
 
 
 class AnalysisNotFoundError(LookupError):
@@ -30,6 +45,8 @@ class AnalysisStore:
         groups: list[dict[str, object]],
         parameters: dict[str, object],
         statistics_content: bytes = b"",
+        style: dict[str, object] | None = None,
+        derived_from: str | None = None,
     ) -> dict[str, object]:
         artifact_id = uuid.uuid4().hex[:16]
         self.root.mkdir(parents=True, exist_ok=True)
@@ -38,11 +55,20 @@ class AnalysisStore:
         temporary_dir.mkdir()
         try:
             image_entries = []
+            archived = []
             for filename, content in images.items():
                 (temporary_dir / filename).write_bytes(content)
+                archived.append(filename)
+                extras = getattr(content, "extras", {})
+                for file_format, extra in extras.items():
+                    alternate = _alternate_name(filename, file_format)
+                    (temporary_dir / alternate).write_bytes(extra)
+                    archived.append(alternate)
                 image_entries.append({
                     "name": filename,
-                    "title": filename.removesuffix(".png").replace("_", " ").title(),
+                    "title": getattr(content, "label", "") or filename.removesuffix(".png").replace("_", " ").title(),
+                    "formats": ["png", *extras],
+                    "texts": list(getattr(content, "texts", ())),
                 })
             csv_name = "cell-tracking-metrics.csv"
             statistics_name = "cell-tracking-statistics.csv"
@@ -50,12 +76,12 @@ class AnalysisStore:
             (temporary_dir / csv_name).write_bytes(csv_content)
             (temporary_dir / statistics_name).write_bytes(statistics_content)
             with zipfile.ZipFile(temporary_dir / zip_name, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for filename in images:
+                for filename in archived:
                     archive.write(temporary_dir / filename, arcname=filename)
                 archive.write(temporary_dir / csv_name, arcname=csv_name)
                 archive.write(temporary_dir / statistics_name, arcname=statistics_name)
             manifest: dict[str, object] = {
-                "schema_version": 4,
+                "schema_version": 5,
                 "id": artifact_id,
                 "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "images": image_entries,
@@ -64,6 +90,8 @@ class AnalysisStore:
                 "csv_file": csv_name,
                 "statistics_file": statistics_name,
                 "archive_file": zip_name,
+                "style": style or DEFAULT_FIGURE_STYLE.model_dump(),
+                "derived_from": derived_from,
             }
             (temporary_dir / "manifest.json").write_text(
                 json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -107,7 +135,13 @@ class AnalysisStore:
 
     def image_file(self, artifact_id: str, filename: str) -> Path:
         manifest = self.read(artifact_id)
-        allowed = {str(image["name"]) for image in manifest["images"]}
+        allowed = {
+            name
+            for image in manifest["images"]
+            for name in (str(image["name"]), *(
+                _alternate_name(str(image["name"]), str(item)) for item in image["formats"] if item != "png"
+            ))
+        }
         if filename not in allowed:
             raise AnalysisNotFoundError("Analysis image not found")
         return self.root / artifact_id / filename
@@ -129,11 +163,15 @@ class AnalysisStore:
         normalized.setdefault("parameters", DEFAULT_ANALYSIS_PARAMETERS.model_dump())
         normalized.setdefault("csv_file", "cell-tracking-metrics.csv")
         normalized.setdefault("archive_file", "cell-tracking-analysis-images.zip")
+        normalized.setdefault("style", DEFAULT_FIGURE_STYLE.model_dump())
+        normalized.setdefault("derived_from", None)
         images = normalized.get("images", [])
         normalized["images"] = [
-            image if isinstance(image, dict) else {
+            {"formats": ["png"], "texts": [], **image} if isinstance(image, dict) else {
                 "name": str(image),
                 "title": str(image).removesuffix(".png").replace("_", " ").title(),
+                "formats": ["png"],
+                "texts": [],
             }
             for image in images
         ]
@@ -154,6 +192,11 @@ def analysis_payload(manifest: dict[str, object]) -> dict[str, object]:
             **image,
             "url": f"/api/analysis/{artifact_id}/images/{image['name']}",
             "download_url": f"/api/analysis/{artifact_id}/images/{image['name']}/download",
+            "downloads": {
+                str(file_format): f"/api/analysis/{artifact_id}/images/"
+                f"{image['name'] if file_format == 'png' else _alternate_name(str(image['name']), str(file_format))}/download"
+                for file_format in image["formats"]
+            },
         } for image in manifest["images"]],
     }
     if manifest.get("statistics_file"):

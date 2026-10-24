@@ -93,6 +93,46 @@ Supported formats: `.bmp`, `.jpeg`, `.jpg`, `.png`, `.tif`, and `.tiff`.
 Application updates do not replace or delete `Datasets/`, `models/`, or
 `workspace/`.
 
+## Adjust figures without changing code
+
+Open an analysis result and expand **Edit figures**. Everything there changes
+how the figures look, never what they show:
+
+- **Groups**: rename or reorder groups and pick their colours. Every group
+  stays in the comparison. Reordering only changes which group is listed
+  first in the statistics export: the p-values stay the same, the
+  Mann-Whitney U is reported for the other group and effect sizes change
+  sign.
+- **Trajectory type colours** for Random, Mixed and Directed.
+- **Output**: resolution (DPI), font size multiplier, extra formats (TIFF,
+  PDF, SVG; text stays editable in PDF and SVG), hiding figure titles, and
+  short dataset names on representative tracks.
+- **Wording**: every title, axis label, tick label and legend entry is
+  listed. Type a replacement, or tick *Hide* to remove it. Matching is
+  exact, by whole label or by single line, so `Glutaraldehyde` also renames
+  the first line of `Glutaraldehyde` / `n=10`.
+- **Units**: µm per pixel and minutes per frame. This is the one setting
+  that changes numbers, and only by a scale: lengths, speeds and areas are
+  converted and time axes show hours since the first frame, while
+  directionality, roundness, angles, the trajectory classes and every p-value
+  stay the same. Axis labels change with the units, so text replacements
+  written for the pixel labels need to be written again. Leave both empty to
+  keep pixels and frames.
+- **Composite figures**: put any panels into columns (read top to bottom,
+  lettered A, B, C down each column in turn). Presets reproduce the
+  manuscript layouts. Each composite is saved as
+  `composite_NN_<name>.png` next to the standard figures.
+
+**Re-render figures** creates a new result from the same datasets and
+parameters (with the units above) and opens it; the result you started from is kept, and the new
+one links back to it. **Export style** saves the settings as JSON, so the
+same look can be applied to another analysis with **Import style**.
+
+The standard figures with the default style are pixel-for-pixel the same as
+before this panel existed. `tests/test_figure_style.py` pins the plotted
+data of every figure, so any code change that would alter what a figure
+shows fails the tests.
+
 ## Analysis methods
 
 Every figure type is exported by default: cell appearance, temporal trends

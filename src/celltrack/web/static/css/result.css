@@ -15,11 +15,48 @@
 .result-figure figcaption { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .result-figure h2 { margin: 0; font-size: 16px; }
 .result-figure img { display: block; width: 100%; height: auto; background: white; }
+.result-header small a { color: var(--primary-dark); }
+.figure-downloads { display: inline-flex; align-items: center; gap: 2px; }
+.figure-downloads .text-button { min-height: 36px; padding: 0 8px; font-size: 12px; }
+.figure-editor { margin: 0 0 28px; padding: 4px 16px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.figure-editor > summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+.figure-editor fieldset { min-width: 0; }
+.editor-hint { margin: 6px 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.editor-group-row { display: grid; grid-template-columns: 44px minmax(160px, 320px) minmax(0, 1fr) 44px 44px; align-items: center; gap: 8px; margin-top: 6px; }
+.editor-group-row small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.figure-editor input[type="color"] { width: 44px; height: 40px; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: white; }
+.editor-grid { display: grid; grid-template-columns: repeat(2, minmax(160px, 320px)); gap: 12px; }
+.editor-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+.editor-checks { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; }
+.editor-inline { min-height: 40px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.editor-inline input[type="checkbox"] { width: 18px; height: 18px; }
+.editor-texts { max-height: 420px; overflow: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+.editor-text-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 1fr) 76px; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.editor-text-row:last-child { border-bottom: 0; }
+.editor-text-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.editor-text-row input[type="text"] { min-height: 38px; }
+.editor-composite { margin-top: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); }
+.editor-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; margin-top: 8px; }
+.editor-column { display: grid; align-content: start; gap: 6px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.editor-column strong { font-size: 12px; color: var(--muted); }
+.editor-block { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 4px; align-items: center; }
+.figure-editor select { min-height: 40px; width: 100%; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: white; font: inherit; }
+.editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.editor-actions select { width: auto; max-width: 100%; min-width: 0; }
+.text-button.danger { color: var(--danger); }
+.editor-footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; padding: 10px 0 0; border-top: 1px solid var(--border); background: var(--surface); }
+.editor-footer label.button { cursor: pointer; }
+.editor-status { flex: 1; min-width: 120px; color: var(--muted); font-size: 13px; }
+.editor-status.error { color: var(--danger); }
 @media (prefers-reduced-motion: reduce) {
   .result-loading svg { animation-duration: 2s; }
 }
 @media (max-width: 620px) {
   .result-header { grid-template-columns: 44px minmax(0,1fr); }
   .result-actions { grid-column: 1 / -1; }
-  .result-actions .button { flex: 1; }
+  .result-actions { flex-wrap: wrap; }
+  .result-actions .button { flex: 1 1 140px; }
+  .editor-group-row { grid-template-columns: 44px minmax(0, 1fr) 44px 44px; }
+  .editor-group-row small { display: none; }
+  .editor-grid, .editor-text-row { grid-template-columns: 1fr; }
 }

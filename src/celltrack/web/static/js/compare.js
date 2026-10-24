@@ -1,5 +1,5 @@
 import { state, escapeHtml } from "./state.js?v=6";
-import { formatText } from "./strings.js?v=6";
+import { formatText } from "./strings.js?v=7";
 
 const numericFields = [
   ["long_track_min_observations", "Long-track observations", 1],

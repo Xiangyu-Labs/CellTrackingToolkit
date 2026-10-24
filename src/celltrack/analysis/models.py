@@ -29,6 +29,17 @@ SUMMARY_METRICS = {
     "mean_shape_change_rate": "Shape change rate",
 }
 
+def unit_label(label: str, microns_per_pixel: float | None, frame_interval_minutes: float | None) -> str:
+    """Rewrite a pixel/frame unit in a label once a physical scale is known."""
+    distance = "µm" if microns_per_pixel is not None else "px"
+    time = "min" if frame_interval_minutes is not None else "frame"
+    return (
+        label.replace("(px/frame)", f"({distance}/{time})")
+        .replace("(px2)", "(µm²)" if microns_per_pixel is not None else "(px2)")
+        .replace("(px)", f"({distance})")
+    )
+
+
 # Panel order shared by the temporal and the parameter-distribution grids.
 # Position i on the left of paper_02 shows the same quantity as position i on
 # the right, which is what the figure review asked for. Both default metric

@@ -172,7 +172,18 @@ def _polygon_metrics(value: str | None) -> tuple[float, float, float, float]:
     return area, perimeter, aspect_ratio, roundness
 
 
-def _load_raw_tracks(csv_path: Path, dataset: str) -> tuple[RawTrack, ...]:
+def _load_raw_tracks(
+    csv_path: Path,
+    dataset: str,
+    microns_per_pixel: float | None = None,
+    frame_interval_minutes: float | None = None,
+) -> tuple[RawTrack, ...]:
+    """Positions and shapes come in pixels and frames.
+
+    With a physical scale every length is converted here, once, so all later
+    numbers (speeds, MSD, areas, statistics) are in micrometres and minutes.
+    Ratios such as directionality, roundness and turning angles do not change.
+    """
     grouped: dict[int, list[dict[str, str]]] = {}
     with csv_path.open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
@@ -187,6 +198,9 @@ def _load_raw_tracks(csv_path: Path, dataset: str) -> tuple[RawTrack, ...]:
         timeframe = np.asarray([int(row["timeframe"]) for row in ordered], dtype=float)
         x = np.asarray([float(row["x"]) for row in ordered], dtype=float)
         y = np.asarray([float(row["y"]) for row in ordered], dtype=float)
+        if microns_per_pixel is not None:
+            x = x * microns_per_pixel
+            y = y * microns_per_pixel
         if not len(timeframe):
             continue
 
@@ -197,6 +211,8 @@ def _load_raw_tracks(csv_path: Path, dataset: str) -> tuple[RawTrack, ...]:
         if len(x) > 1:
             step[1:] = np.hypot(np.diff(x), np.diff(y))
             frame_delta = np.maximum(1.0, np.diff(timeframe))
+            if frame_interval_minutes is not None:
+                frame_delta = frame_delta * frame_interval_minutes
             speed[1:] = step[1:] / frame_delta
         path = np.cumsum(np.nan_to_num(step))
         net = np.hypot(x - x[0], y - y[0])
@@ -217,6 +233,9 @@ def _load_raw_tracks(csv_path: Path, dataset: str) -> tuple[RawTrack, ...]:
         perimeter = np.asarray([item[1] for item in polygon_metrics], dtype=float)
         aspect_ratio = np.asarray([item[2] for item in polygon_metrics], dtype=float)
         roundness = np.asarray([item[3] for item in polygon_metrics], dtype=float)
+        if microns_per_pixel is not None:
+            area = area * microns_per_pixel ** 2
+            perimeter = perimeter * microns_per_pixel
         shape_change = np.full(len(area), np.nan, dtype=float)
         for index in range(1, len(area)):
             if math.isfinite(area[index - 1]) and math.isfinite(area[index]) and area[index - 1] > 0 and area[index] > 0:
@@ -253,6 +272,8 @@ def _classify(directionality: float, parameters: AnalysisParameters) -> str:
 def _summarize(track: GroupedTrack, parameters: AnalysisParameters) -> TrackSummary:
     raw = track.raw
     frame_span = max(1, raw.timeframe[-1] - raw.timeframe[0])
+    if parameters.frame_interval_minutes is not None:
+        frame_span = frame_span * parameters.frame_interval_minutes
     total_path = math.fsum(value for value in raw.step_distance if math.isfinite(value))
     net = raw.net_displacement[-1]
     directionality = float(np.clip(net / total_path, 0.0, 1.0)) if total_path else 0.0
@@ -315,7 +336,12 @@ def prepare_analysis(
         for dataset_name, csv_path in sources:
             resolved = csv_path.resolve()
             if resolved not in cache:
-                cache[resolved] = _load_raw_tracks(resolved, dataset_name)
+                cache[resolved] = _load_raw_tracks(
+                    resolved,
+                    dataset_name,
+                    parameters.microns_per_pixel,
+                    parameters.frame_interval_minutes,
+                )
             grouped_tracks.extend(GroupedTrack(group_name, raw) for raw in cache[resolved])
     summaries = tuple(_summarize(track, parameters) for track in grouped_tracks)
     msd = tuple(series for track in grouped_tracks if (series := _compute_msd(track, parameters)) is not None)
@@ -357,7 +383,6 @@ def msd_summary(
         by_lag.setdefault(lag, []).append(statistics.fmean(values))
     minimum = max(1, math.ceil(0.5 * len(datasets))) if filter_sparse_tail else 1
     time_scale = bundle.parameters.frame_interval_minutes or 1.0
-    distance_scale = (bundle.parameters.microns_per_pixel or 1.0) ** 2
     points: list[MsdSummaryPoint] = []
     for lag in sorted(by_lag):
         values = by_lag[lag]
@@ -372,9 +397,9 @@ def msd_summary(
             low, high = mean - margin, mean + margin
         points.append(MsdSummaryPoint(
             lag=lag * time_scale,
-            mean=mean * distance_scale,
-            ci_low=None if low is None else low * distance_scale,
-            ci_high=None if high is None else high * distance_scale,
+            mean=mean,
+            ci_low=low,
+            ci_high=high,
             n=len(values),
         ))
     return tuple(points)

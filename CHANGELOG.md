@@ -5,6 +5,24 @@ workflow replaces that heading with the version number and release time.
 
 ## Unreleased
 
+- Fixed the Updates tab showing no changes on the server version.
+- Added an "Edit figures" panel to the analysis result page. Group names,
+  group order and colours, trajectory-type colours, any figure text, font
+  size, resolution and output formats (PNG, TIFF, PDF, SVG) can be changed
+  and the figures re-rendered without changing code. Re-rendering creates a
+  new result from the same datasets and parameters, so the data and the
+  statistics stay the same, and the previous result is kept.
+- Added composite figures: panels from different figures can be arranged in
+  columns with panel letters, with presets matching the manuscript layouts.
+  Styles can be exported and imported as JSON.
+- PDF and SVG exports keep their text editable.
+- Figures can be shown in µm and minutes. Set "µm per pixel" and "Minutes
+  per frame" under "Units" in "Edit figures": lengths, speeds and areas are
+  converted, time axes show hours, and directionality, angles, trajectory
+  classes and p-values stay the same. Without these values nothing changes.
+- Composite figures are listed on the result page under their own name, such
+  as "Figure 1".
+
 ## 2.0.16 — 2026-10-13 19:24 (UTC+8)
 
 - Added an Updates tab that lists what changed in each version.

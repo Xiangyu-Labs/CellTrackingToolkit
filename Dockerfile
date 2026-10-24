@@ -25,7 +25,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev --python /usr/local/bin/python3.11
 
-COPY VERSION run.py ./
+COPY VERSION CHANGELOG.md run.py ./
 COPY src ./src
 ENV PYTHONPATH=/app/src
 

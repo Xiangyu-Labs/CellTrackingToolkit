@@ -1,6 +1,7 @@
 import { api } from "./api.js?v=2";
-import { escapeHtml } from "./state.js?v=5";
-import { formatText } from "./strings.js?v=6";
+import { initializeFigureEditor } from "./figure-editor.js?v=1";
+import { escapeHtml } from "./state.js?v=6";
+import { formatText } from "./strings.js?v=7";
 
 function formatParameters(parameters) {
   parameters = parameters || {};
@@ -66,7 +67,15 @@ async function renderResult(artifactId) {
   const created = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(result.created_at));
   document.title = `Analysis ${result.id}`;
   document.querySelector("#resultId").textContent = `/analysis/${result.id}`;
-  document.querySelector("#resultMeta").textContent = `${formatText("generated")} ${created}`;
+  const meta = document.querySelector("#resultMeta");
+  meta.textContent = `${formatText("generated")} ${created}`;
+  if (result.derived_from) {
+    meta.append(" | ", formatText("derivedFrom"), " ");
+    const link = document.createElement("a");
+    link.href = `/analysis/${result.derived_from}`;
+    link.textContent = `/analysis/${result.derived_from}`;
+    meta.append(link);
+  }
   document.querySelector("#csvLink").href = result.csv_url;
   document.querySelector("#csvLink span").textContent = formatText("csv");
   const statisticsLink = document.querySelector("#statisticsLink");
@@ -84,8 +93,18 @@ async function renderResult(artifactId) {
   const parameterText = document.querySelector("#parameterText");
   parameterText.textContent = formatParameters(result.parameters);
   parameterText.hidden = false;
-  document.querySelector("#imageList").innerHTML = result.images.map((image, index) => `<figure class="result-figure"><figcaption><h2>${escapeHtml(image.title)}</h2><a class="icon-button" href="${image.download_url}" aria-label="${formatText("figure")}" title="${formatText("figure")}"><i data-lucide="download"></i></a></figcaption><img src="${image.url}" alt="${escapeHtml(image.title)}" ${index ? 'loading="lazy"' : ""}></figure>`).join("");
+  document.querySelector("#imageList").innerHTML = result.images.map((image, index) => {
+    const extra = Object.entries(image.downloads || {}).filter(([format]) => format !== "png")
+      .map(([format, url]) => `<a class="text-button" href="${url}">${format.toUpperCase()}</a>`).join("");
+    return `<figure class="result-figure"><figcaption><h2>${escapeHtml(image.title)}</h2><span class="figure-downloads">${extra}<a class="icon-button" href="${image.download_url}" aria-label="${formatText("figure")}" title="${formatText("figure")}"><i data-lucide="download"></i></a></span></figcaption><img src="${image.url}" alt="${escapeHtml(image.title)}" ${index ? 'loading="lazy"' : ""}></figure>`;
+  }).join("");
   document.querySelector("#loading").hidden = true;
+  try {
+    const options = await api("/api/analysis/options");
+    if (options.style) initializeFigureEditor(result, options.style);
+  } catch (error) {
+    // The figures are already on screen; the editor is optional.
+  }
   window.lucide?.createIcons({ attrs: { "stroke-width": 1.8 } });
 }
 

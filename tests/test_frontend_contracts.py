@@ -48,12 +48,12 @@ class FrontendContractTests(unittest.TestCase):
         for asset in (
             "/static/css/components.css?v=8",
             "/static/css/layout.css?v=8",
-            "/static/js/app.js?v=18",
+            "/static/js/app.js?v=19",
         ):
             self.assertIn(asset, index)
-        self.assertIn('"./workflow.js?v=12"', app)
-        self.assertIn('"./compare.js?v=12"', app)
-        self.assertIn('"./strings.js?v=6"', app)
+        self.assertIn('"./workflow.js?v=13"', app)
+        self.assertIn('"./compare.js?v=13"', app)
+        self.assertIn('"./strings.js?v=7"', app)
 
     def test_result_viewer_has_download_links_and_updates_frame_url(self):
         index = self.read_static("index.html")
@@ -66,6 +66,27 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("results/${viewer.kind}/frames/${viewer.index}/download", app)
         self.assertIn("results/${kind}/download", app)
         self.assertIn('$("#downloadCurrentFrame").removeAttribute("href")', app)
+
+    def test_result_page_modules_share_versions_and_load_the_editor(self):
+        result_page = self.read_static("analysis-result.html")
+        result = self.read_static("js/result.js")
+        editor = self.read_static("js/figure-editor.js")
+
+        self.assertIn("/static/js/result.js?v=9", result_page)
+        self.assertIn("/static/css/result.css?v=3", result_page)
+        self.assertIn('id="figureEditor"', result_page)
+        self.assertIn('"./figure-editor.js?v=1"', result)
+        for module in (result, editor, self.read_static("js/app.js")):
+            self.assertIn('"./strings.js?v=7"', module)
+            self.assertIn('"./state.js?v=6"', module)
+        self.assertIn("/rerender", editor)
+
+    def test_editor_strings_exist(self):
+        strings = self.read_static("js/strings.js")
+        editor = self.read_static("js/figure-editor.js")
+        keys = set(re.findall(r'formatText\("([A-Za-z]+)"', editor))
+        missing = sorted(key for key in keys if not re.search(rf"^\s+{key}:", strings, re.M))
+        self.assertEqual(missing, [])
 
     def test_parameter_distributions_require_a_main_grid_metric(self):
         compare = self.read_static("js/compare.js")
@@ -82,7 +103,7 @@ class WebCacheTests(unittest.TestCase):
         for path in (
             "/",
             "/analysis/tasks/pending",
-            "/static/js/app.js?v=18",
+            "/static/js/app.js?v=19",
             "/static/css/layout.css?v=8",
         ):
             with self.subTest(path=path):

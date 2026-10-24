@@ -380,14 +380,16 @@ class AnalysisTests(unittest.TestCase):
             source_files_read=0,
             parameters=parameters,
         )
+        # Distances are converted when the tracks are read, so MSD values
+        # arrive here in µm² already; only the lag is turned into minutes.
         points = msd_summary(bundle, "A")
         self.assertEqual(len(points), 1)
         self.assertEqual(points[0].lag, 50.0)
-        self.assertEqual(points[0].mean, 25.0)
+        self.assertEqual(points[0].mean, 100.0)
         self.assertEqual(points[0].n, 5)
         unfiltered = msd_summary(bundle, "A", filter_sparse_tail=False)
         self.assertEqual(unfiltered[1].lag, 100.0)
-        self.assertEqual(unfiltered[1].mean, 100.0)
+        self.assertEqual(unfiltered[1].mean, 400.0)
 
     def test_single_track_msd_summary_has_mean_without_confidence_interval(self):
         from celltrack.analysis.compute import AnalysisBundle, GroupedTrack, MsdSeries, RawTrack, msd_summary
@@ -647,7 +649,7 @@ class AnalysisTests(unittest.TestCase):
             artifact_id = manifest["id"]
             payload = analysis_payload(store.read(artifact_id))
             self.assertEqual(payload["result_url"], f"/analysis/{artifact_id}")
-            self.assertEqual(manifest["schema_version"], 4)
+            self.assertEqual(manifest["schema_version"], 5)
             self.assertIn("statistics_url", payload)
             self.assertEqual(store.list()[0]["id"], artifact_id)
             self.assertTrue(store.data_file(artifact_id, "archive_file").is_file())

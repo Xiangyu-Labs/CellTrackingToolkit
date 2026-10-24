@@ -10,6 +10,7 @@ import uuid
 from celltrack.analysis.models import AnalysisParameters
 from celltrack.analysis.service import create_analysis
 from celltrack.analysis.storage import analysis_payload
+from celltrack.analysis.style import FigureStyle
 
 
 def now_iso() -> str:
@@ -27,6 +28,7 @@ class AnalysisTask:
     result: dict[str, object] | None = None
     created_at: str = field(default_factory=now_iso)
     completed_at: str | None = None
+    derived_from: str | None = None
 
 
 class AnalysisTaskManager:
@@ -40,18 +42,26 @@ class AnalysisTaskManager:
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="celltrack-analysis")
 
-    def submit(self, groups: list[tuple[str, list[str]]], parameters: AnalysisParameters) -> AnalysisTask:
+    def submit(
+        self,
+        groups: list[tuple[str, list[str]]],
+        parameters: AnalysisParameters,
+        style: FigureStyle | None = None,
+        derived_from: str | None = None,
+    ) -> AnalysisTask:
         copied_groups = [(name, list(dataset_ids)) for name, dataset_ids in groups]
         copied_parameters = parameters.model_copy(deep=True)
+        copied_style = style.model_copy(deep=True) if style else None
         task = AnalysisTask(
             id=uuid.uuid4().hex[:12],
             groups=[{"name": name, "dataset_count": len(dataset_ids)} for name, dataset_ids in copied_groups],
             parameters=copied_parameters.model_dump(),
+            derived_from=derived_from,
         )
         with self._lock:
             self._tasks[task.id] = task
             self._futures[task.id] = self._executor.submit(
-                self._run, task, copied_groups, copied_parameters
+                self._run, task, copied_groups, copied_parameters, copied_style
             )
         return task
 
@@ -72,10 +82,14 @@ class AnalysisTaskManager:
         task: AnalysisTask,
         groups: list[tuple[str, list[str]]],
         parameters: AnalysisParameters,
+        style: FigureStyle | None = None,
     ) -> None:
         self._update(task, status="running", message="Generating comparison")
         try:
-            manifest = self._creator(groups, parameters)
+            if style is None and task.derived_from is None:
+                manifest = self._creator(groups, parameters)
+            else:
+                manifest = self._creator(groups, parameters, style=style, derived_from=task.derived_from)
             self._update(
                 task,
                 status="completed",
@@ -104,6 +118,7 @@ def serialize_analysis_task(task: AnalysisTask) -> dict[str, object]:
         "result": task.result,
         "created_at": task.created_at,
         "completed_at": task.completed_at,
+        "derived_from": task.derived_from,
     }
 
 

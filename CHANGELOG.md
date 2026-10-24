@@ -5,6 +5,8 @@ workflow replaces that heading with the version number and release time.
 
 ## Unreleased
 
+## 2.0.17 — 2026-10-24 17:42 (UTC+8)
+
 - Fixed the Updates tab showing no changes on the server version.
 - Added an "Edit figures" panel to the analysis result page. Group names,
   group order and colours, trajectory-type colours, any figure text, font

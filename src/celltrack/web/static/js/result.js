@@ -1,7 +1,7 @@
 import { api } from "./api.js?v=2";
-import { initializeFigureEditor } from "./figure-editor.js?v=1";
+import { initializeFigureEditor } from "./figure-editor.js?v=2";
 import { escapeHtml } from "./state.js?v=6";
-import { formatText } from "./strings.js?v=7";
+import { formatText } from "./strings.js?v=8";
 
 function formatParameters(parameters) {
   parameters = parameters || {};
@@ -17,6 +17,12 @@ function formatParameters(parameters) {
   lines.push(`temporal_metrics: ${(parameters.temporal_metrics || []).join(", ")}`);
   lines.push(`summary_metrics: ${(parameters.summary_metrics || []).join(", ")}`);
   return lines.join("\n");
+}
+
+function figureWarnings(image) {
+  const warnings = image.warnings || [];
+  if (!warnings.length) return "";
+  return `<div class="figure-warnings" role="note"><strong>${formatText("figureWarnings")}</strong><ul>${warnings.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`;
 }
 
 function showTaskMetadata(task) {
@@ -96,7 +102,7 @@ async function renderResult(artifactId) {
   document.querySelector("#imageList").innerHTML = result.images.map((image, index) => {
     const extra = Object.entries(image.downloads || {}).filter(([format]) => format !== "png")
       .map(([format, url]) => `<a class="text-button" href="${url}">${format.toUpperCase()}</a>`).join("");
-    return `<figure class="result-figure"><figcaption><h2>${escapeHtml(image.title)}</h2><span class="figure-downloads">${extra}<a class="icon-button" href="${image.download_url}" aria-label="${formatText("figure")}" title="${formatText("figure")}"><i data-lucide="download"></i></a></span></figcaption><img src="${image.url}" alt="${escapeHtml(image.title)}" ${index ? 'loading="lazy"' : ""}></figure>`;
+    return `<figure class="result-figure"><figcaption><h2>${escapeHtml(image.title)}</h2><span class="figure-downloads">${extra}<a class="icon-button" href="${image.download_url}" aria-label="${formatText("figure")}" title="${formatText("figure")}"><i data-lucide="download"></i></a></span></figcaption>${figureWarnings(image)}<img src="${image.url}" alt="${escapeHtml(image.title)}" ${index ? 'loading="lazy"' : ""}></figure>`;
   }).join("");
   document.querySelector("#loading").hidden = true;
   try {

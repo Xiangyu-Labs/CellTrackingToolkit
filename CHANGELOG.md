@@ -5,6 +5,34 @@ workflow replaces that heading with the version number and release time.
 
 ## Unreleased
 
+- Added "Print size" to "Edit figures". Choose the printed width (85, 120 or
+  180 mm, or another width) and the smallest text size, and every figure is
+  laid out at that width with readable text and the chosen DPI. Figures that
+  do not fit, such as one taller than the page, get a note on the result
+  page instead of being squashed.
+- The final displacement angle plots can use one colour for every group, so
+  green and orange only mean trajectory types in the trajectory analysis
+  panels.
+- Figures are ready for journal submission: data points, stars and brackets
+  are never cut off or crowded, legends no longer cover data, group names
+  under the axes are not turned on their side, and box plots have a dark
+  median line. Trajectory types are now shades of purple, so green, orange
+  and blue always mean a group. Labels read Δx, °, α and "Cumulative tracks"
+  instead of program-style text, and Arial is used when it is installed.
+- MSD now compares positions exactly 1, 2, 3 … frames apart. Tracks with
+  missing frames used to add odd lags that caused spikes at long lags. The
+  MSD exponent α has its own test and is in the statistics export.
+- New "Show test results above each panel" option in "Edit figures". Turn it
+  off for journal figures; the test then goes in the caption and the stars
+  stay.
+- Representative trajectories use a scale set by the tracks shown, skip
+  empty rows, and explain the start and end markers and the colour bar.
+- PNG and TIFF files are saved without a transparency layer.
+- The shaded band in "Temporal trends" now treats each sample as one unit.
+  It used to count every track as an independent sample, which made the band
+  too narrow. Times reached by fewer than half of the samples are no longer
+  drawn, as in the MSD plot.
+
 ## 2.0.17 — 2026-10-24 17:42 (UTC+8)
 
 - Fixed the Updates tab showing no changes on the server version.

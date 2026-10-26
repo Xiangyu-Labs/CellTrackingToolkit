@@ -303,18 +303,31 @@ def _summarize(track: GroupedTrack, parameters: AnalysisParameters) -> TrackSumm
 
 
 def _compute_msd(track: GroupedTrack, parameters: AnalysisParameters) -> MsdSeries | None:
+    """MSD at whole-frame lags, pairing only positions exactly that many frames apart.
+
+    A track with missing frames used to pair its k-th observations whatever
+    time separated them, which put a few odd lags (52.5 frames, say) into the
+    group curves, each backed by a handful of tracks: the spikes and saw teeth
+    at long lags. Without gaps the result is unchanged.
+    """
     raw = track.raw
     x = np.asarray(raw.x, dtype=float)
     y = np.asarray(raw.y, dtype=float)
-    timeframe = np.asarray(raw.timeframe, dtype=float)
+    timeframe = np.asarray(raw.timeframe, dtype=np.int64)
     if len(x) < 3:
         return None
+    span = int(timeframe[-1] - timeframe[0])
     lags: list[float] = []
     values: list[float] = []
-    for lag in range(1, min(len(x) // 2, parameters.msd_max_lag) + 1):
-        delta_x = x[lag:] - x[:-lag]
-        delta_y = y[lag:] - y[:-lag]
-        lags.append(float(np.median(timeframe[lag:] - timeframe[:-lag])))
+    for lag in range(1, min((span + 1) // 2, parameters.msd_max_lag) + 1):
+        later = np.searchsorted(timeframe, timeframe + lag)
+        paired = later < len(timeframe)
+        paired[paired] = timeframe[later[paired]] == timeframe[paired] + lag
+        if not paired.any():
+            continue
+        delta_x = x[later[paired]] - x[paired]
+        delta_y = y[later[paired]] - y[paired]
+        lags.append(float(lag))
         values.append(float(np.mean(delta_x * delta_x + delta_y * delta_y)))
     positive = [(lag, value) for lag, value in zip(lags, values) if lag > 0 and value > 0][:parameters.msd_fit_points]
     alpha: float | None = None
@@ -413,6 +426,11 @@ def dataset_metric_values(
 ) -> tuple[tuple[str, float], ...]:
     """Return one equally weighted track mean per dataset."""
     by_dataset: dict[str, list[float]] = {}
+    if metric == "msd_alpha":
+        for series in bundle.msd_for(group, prefer_long):
+            if series.alpha is not None and math.isfinite(series.alpha):
+                by_dataset.setdefault(series.dataset, []).append(series.alpha)
+        return tuple((dataset, statistics.fmean(values)) for dataset, values in sorted(by_dataset.items()) if values)
     for item in bundle.summaries_for(group, prefer_long):
         value = float(getattr(item, metric))
         if math.isfinite(value):
@@ -566,6 +584,8 @@ def statistics_to_csv(bundle: AnalysisBundle) -> bytes:
     if "classification" in bundle.parameters.figure_types:
         if "directionality" not in metrics:
             metrics.append("directionality")
+    if bundle.msd and "msd_alpha" not in metrics:
+        metrics.append("msd_alpha")
     for result in statistical_results(bundle, metrics):
         writer.writerow([getattr(result, field) for field in fields])
     return buffer.getvalue().encode("utf-8-sig")

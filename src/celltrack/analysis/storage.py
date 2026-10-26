@@ -69,6 +69,7 @@ class AnalysisStore:
                     "title": getattr(content, "label", "") or filename.removesuffix(".png").replace("_", " ").title(),
                     "formats": ["png", *extras],
                     "texts": list(getattr(content, "texts", ())),
+                    "warnings": list(getattr(content, "warnings", ())),
                 })
             csv_name = "cell-tracking-metrics.csv"
             statistics_name = "cell-tracking-statistics.csv"
@@ -167,11 +168,12 @@ class AnalysisStore:
         normalized.setdefault("derived_from", None)
         images = normalized.get("images", [])
         normalized["images"] = [
-            {"formats": ["png"], "texts": [], **image} if isinstance(image, dict) else {
+            {"formats": ["png"], "texts": [], "warnings": [], **image} if isinstance(image, dict) else {
                 "name": str(image),
                 "title": str(image).removesuffix(".png").replace("_", " ").title(),
                 "formats": ["png"],
                 "texts": [],
+                "warnings": [],
             }
             for image in images
         ]

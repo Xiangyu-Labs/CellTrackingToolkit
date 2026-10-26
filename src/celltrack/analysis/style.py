@@ -35,7 +35,11 @@ BLOCKS = {
 
 OUTPUT_FORMATS = ("png", "tiff", "pdf", "svg")
 DEFAULT_GROUP_COLORS = ("#156F62", "#D97706", "#2563EB", "#B42318", "#7C3AED", "#087EA4")
-DEFAULT_TYPE_COLORS = {"Random": "#B42318", "Mixed": "#D97706", "Directed": "#19704E"}
+# Trajectory types are ordered (random < mixed < directed), so they use one
+# hue from light to dark. No step shares a hue with the group colours, so
+# green or orange always means a group.
+DEFAULT_TYPE_COLORS = {"Random": "#9F8FDD", "Mixed": "#6650C4", "Directed": "#3A2683"}
+NEUTRAL_ANGLE_COLOR = "#6B7280"
 HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
@@ -72,10 +76,28 @@ class FigureStyle(BaseModel):
     font_scale: float = Field(default=1.0, ge=0.5, le=3.0)
     group_colors: dict[str, str] = Field(default_factory=dict)
     type_colors: dict[str, str] = Field(default_factory=dict)
+    # Colour of the final-displacement-angle (polar) plot. Empty keeps each
+    # group's colour. Next to trajectories coloured by type, a neutral colour
+    # avoids green/orange meaning a group in one panel and a type in the next.
+    angle_plot_color: str = ""
     # Exact text replacements, matched on the whole label. An empty
     # replacement removes that text and the space it took.
     text: dict[str, str] = Field(default_factory=dict)
     hide_figure_titles: bool = False
+    # The test name, p-value and effect size above each distribution panel.
+    # Journals usually want them in the caption; the stars stay either way.
+    stat_captions: bool = True
+    # Print size. When set, every figure is laid out for this printed width:
+    # the canvas shrinks until its smallest text prints at ``print_text_pt``,
+    # long titles wrap, and PNG/TIFF carry ``dpi`` at that width. Lines and
+    # markers shrink with the canvas, so the figure looks as it will on paper.
+    print_width_mm: float | None = Field(default=None, ge=30, le=500)
+    print_text_pt: float = Field(default=6.0, ge=4, le=14)
+    # A figure taller than this at the print width is squeezed to it (panels
+    # get shorter, not narrower) unless a plot would end up under 12 mm; then it
+    # keeps its height and the figure carries a warning. 230 mm fits a
+    # journal page with a caption.
+    print_max_height_mm: float = Field(default=230, ge=30, le=1000)
     short_dataset_names: bool = False
     composites: list[CompositeFigure] = Field(default_factory=list, max_length=12)
 
@@ -92,6 +114,13 @@ class FigureStyle(BaseModel):
         if bad:
             raise ValueError(f"Colours must look like #1A2B3C: {', '.join(bad)}")
         return colors
+
+    @field_validator("angle_plot_color")
+    @classmethod
+    def optional_hex_color(cls, color: str) -> str:
+        if color and not HEX_COLOR.match(color):
+            raise ValueError(f"Colours must look like #1A2B3C: {color}")
+        return color
 
     @field_validator("type_colors")
     @classmethod
@@ -179,6 +208,9 @@ def style_options() -> dict[str, object]:
         "formats": list(OUTPUT_FORMATS),
         "group_colors": list(DEFAULT_GROUP_COLORS),
         "type_colors": DEFAULT_TYPE_COLORS,
+        "neutral_angle_color": NEUTRAL_ANGLE_COLOR,
         "presets": COMPOSITE_PRESETS,
-        "ranges": {"dpi": [72, 1200], "font_scale": [0.5, 3.0]},
+        "ranges": {"dpi": [72, 1200], "font_scale": [0.5, 3.0], "print_width_mm": [30, 500], "print_text_pt": [4, 14], "print_max_height_mm": [30, 1000]},
+        # Common journal widths: single column, 1.5 column, full page width.
+        "print_widths": [85, 120, 180],
     }

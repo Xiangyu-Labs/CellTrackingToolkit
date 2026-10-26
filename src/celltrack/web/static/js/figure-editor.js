@@ -9,7 +9,7 @@
 
 import { api } from "./api.js?v=2";
 import { escapeHtml } from "./state.js?v=6";
-import { formatText } from "./strings.js?v=7";
+import { formatText } from "./strings.js?v=8";
 
 const TYPES = ["Random", "Mixed", "Directed"];
 const TEXT_LIMIT = 150;
@@ -76,6 +76,16 @@ function typeRows() {
     <label class="editor-inline"><input type="color" data-field="type-color" data-type="${type}" value="${escapeHtml(edit.style.type_colors?.[type] || options.type_colors[type])}"><span>${type}</span></label>`).join("");
 }
 
+function angleRows() {
+  const color = edit.style.angle_plot_color || "";
+  return `
+    <div class="editor-checks">
+      <label class="editor-inline"><input type="checkbox" data-field="angle-own" ${color ? "checked" : ""}><span>${formatText("angleOwnColor")}</span></label>
+      <input type="color" data-field="angle-color" value="${escapeHtml(color || options.neutral_angle_color)}" ${color ? "" : "disabled"} aria-label="${formatText("angleColor")}">
+    </div>
+    <p class="editor-hint">${formatText("angleHint")}</p>`;
+}
+
 function outputRows() {
   const style = edit.style;
   const [minDpi, maxDpi] = options.ranges.dpi;
@@ -91,8 +101,31 @@ function outputRows() {
     <div class="editor-checks">
       <label class="editor-inline"><input type="checkbox" data-field="hide_figure_titles" ${style.hide_figure_titles ? "checked" : ""}><span>${formatText("hideTitles")}</span></label>
       <label class="editor-inline"><input type="checkbox" data-field="short_dataset_names" ${style.short_dataset_names ? "checked" : ""}><span>${formatText("shortNames")}</span></label>
+      <label class="editor-inline"><input type="checkbox" data-field="stat_captions" ${style.stat_captions !== false ? "checked" : ""}><span>${formatText("statCaptions")}</span></label>
     </div>
     <p class="editor-hint">${formatText("dpiHint")}</p>`;
+}
+
+function printRows() {
+  const style = edit.style;
+  const width = style.print_width_mm ?? null;
+  const presets = options.print_widths;
+  const custom = width !== null && (edit.printCustom || !presets.includes(width));
+  const range = key => options.ranges[key];
+  const choices = [
+    `<option value="" ${width === null ? "selected" : ""}>${formatText("printWidthScreen")}</option>`,
+    ...presets.map(value => `<option value="${value}" ${!custom && value === width ? "selected" : ""}>${value} mm</option>`),
+    `<option value="custom" ${custom ? "selected" : ""}>${formatText("printWidthCustom")}</option>`,
+  ].join("");
+  const off = width === null ? "disabled" : "";
+  return `
+    <div class="editor-grid">
+      <label>${formatText("printWidth")}<select data-field="print-width">${choices}</select></label>
+      <label ${custom ? "" : "hidden"}>${formatText("printWidthCustom")} (mm)<input type="number" data-field="print_width_mm" min="${range("print_width_mm")[0]}" max="${range("print_width_mm")[1]}" step="1" value="${custom ? width : ""}"></label>
+      <label>${formatText("printText")}<input type="number" data-field="print_text_pt" min="${range("print_text_pt")[0]}" max="${range("print_text_pt")[1]}" step="0.5" value="${style.print_text_pt ?? options.defaults.print_text_pt}" ${off}></label>
+      <label>${formatText("printMaxHeight")}<input type="number" data-field="print_max_height_mm" min="${range("print_max_height_mm")[0]}" max="${range("print_max_height_mm")[1]}" step="1" value="${style.print_max_height_mm ?? options.defaults.print_max_height_mm}" ${off}></label>
+    </div>
+    <p class="editor-hint">${formatText("printHint")}</p>`;
 }
 
 function unitRows() {
@@ -174,8 +207,9 @@ function render() {
     <summary>${formatText("editFigures")}</summary>
     <p class="editor-hint">${formatText("editorIntro")}</p>
     <fieldset><legend>${formatText("groupsLegend")}</legend>${groupRows()}<p class="editor-hint">${formatText("groupsHint")}</p></fieldset>
-    <fieldset><legend>${formatText("typeColors")}</legend><div class="editor-checks">${typeRows()}</div></fieldset>
+    <fieldset><legend>${formatText("typeColors")}</legend><div class="editor-checks">${typeRows()}</div>${angleRows()}</fieldset>
     <fieldset><legend>${formatText("output")}</legend>${outputRows()}</fieldset>
+    <fieldset><legend>${formatText("printSize")}</legend>${printRows()}</fieldset>
     <fieldset><legend>${formatText("units")}</legend>${unitRows()}</fieldset>
     <fieldset><legend>${formatText("wording")}</legend>
       <p class="editor-hint">${formatText("wordingHint")}</p>
@@ -229,8 +263,13 @@ function onInput(event) {
   if (field === "group-name") edit.groups[position].name = target.value;
   else if (field === "group-color") edit.colors[position] = target.value;
   else if (field === "type-color") edit.style.type_colors = { ...(edit.style.type_colors || {}), [target.dataset.type]: target.value };
+  else if (field === "angle-color") edit.style.angle_plot_color = target.value;
   else if (field === "dpi") edit.style.dpi = Number(target.value);
   else if (field === "font_scale") edit.style.font_scale = Number(target.value);
+  else if (field === "print_width_mm" || field === "print_text_pt" || field === "print_max_height_mm") {
+    const number = Number(target.value);
+    if (target.value.trim() && number > 0) edit.style[field] = number;
+  }
   else if (field === "microns_per_pixel" || field === "frame_interval_minutes") {
     const number = Number(target.value);
     edit.units[field] = target.value.trim() && number > 0 ? number : null;
@@ -253,7 +292,17 @@ function onChange(event) {
     if (target.checked) formats.add(target.value);
     else formats.delete(target.value);
     edit.style.formats = options.formats.filter(format => format === "png" || formats.has(format));
-  } else if (field === "hide_figure_titles" || field === "short_dataset_names") {
+  } else if (field === "angle-own") {
+    const picker = target.closest("fieldset").querySelector("[data-field=angle-color]");
+    picker.disabled = !target.checked;
+    edit.style.angle_plot_color = target.checked ? picker.value : "";
+  } else if (field === "print-width") {
+    edit.printCustom = target.value === "custom";
+    if (target.value === "") edit.style.print_width_mm = null;
+    else if (edit.printCustom) edit.style.print_width_mm = edit.style.print_width_mm ?? 150;
+    else edit.style.print_width_mm = Number(target.value);
+    render();
+  } else if (field === "hide_figure_titles" || field === "short_dataset_names" || field === "stat_captions") {
     edit.style[field] = target.checked;
   } else if (field === "text-hide") {
     const row = target.closest("[data-text]");

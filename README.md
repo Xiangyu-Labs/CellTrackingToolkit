@@ -103,7 +103,22 @@ how the figures look, never what they show:
   first in the statistics export: the p-values stay the same, the
   Mann-Whitney U is reported for the other group and effect sizes change
   sign.
-- **Trajectory type colours** for Random, Mixed and Directed.
+- **Trajectory type colours** for Random, Mixed and Directed, and optionally
+  one colour for every final-displacement-angle (polar) plot. By default each
+  polar plot takes its group's colour; a single colour (grey suggested) keeps
+  green and orange meaning trajectory types only, next to the trajectory
+  panels.
+- **Print size**: the width the figure will be printed at (85, 120 or 180 mm,
+  or another width), the smallest text size in points, and a page height
+  limit. Every figure is then laid out at that width: text prints at journal
+  sizes (titles one or two points larger), long titles wrap, crowded tick
+  labels turn, tick numbers repeat only on the outer panels of shared-scale
+  grids, two-group representative trajectories stack the groups, and PNG and
+  TIFF files carry the chosen DPI at exactly that width. A figure taller than
+  the limit is shortened while every plot stays at least 12 mm tall;
+  otherwise it keeps its height and the result page shows a note above it,
+  as it does when text overlaps. Significance stars get the headroom they
+  need in shorter panels. The font size multiplier is not used while a print width is set.
 - **Output**: resolution (DPI), font size multiplier, extra formats (TIFF,
   PDF, SVG; text stays editable in PDF and SVG), hiding figure titles, and
   short dataset names on representative tracks.

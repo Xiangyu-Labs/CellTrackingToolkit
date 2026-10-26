@@ -8,12 +8,12 @@ TEMPORAL_METRICS = {
     "step_distance": "Step distance (px)",
     "net_displacement": "Net displacement (px)",
     "directionality": "Directionality",
-    "turning_angle": "Turning angle (deg)",
+    "turning_angle": "Turning angle (°)",
     "area": "Cell area (px2)",
     "perimeter": "Perimeter (px)",
     "aspect_ratio": "Aspect ratio",
     "roundness": "Roundness",
-    "shape_change_rate": "Shape change rate",
+    "shape_change_rate": "Shape change rate (per frame)",
 }
 
 SUMMARY_METRICS = {
@@ -21,20 +21,26 @@ SUMMARY_METRICS = {
     "net_displacement": "Net displacement (px)",
     "mean_speed": "Mean speed (px/frame)",
     "directionality": "Directionality",
-    "mean_turning_angle": "Mean turning angle (deg)",
-    "turning_angle_std": "Turning-angle variability (deg)",
+    "mean_turning_angle": "Mean turning angle (°)",
+    "turning_angle_std": "Turning-angle SD (°)",
     "mean_area": "Mean area (px2)",
     "mean_perimeter": "Mean perimeter (px)",
     "mean_roundness": "Mean roundness",
-    "mean_shape_change_rate": "Shape change rate",
+    "mean_shape_change_rate": "Shape change rate (per frame)",
+    # Mean MSD exponent of the tracks in a dataset; not in the default grid,
+    # the MSD figure shows it.
+    "msd_alpha": "MSD exponent α",
 }
 
 def unit_label(label: str, microns_per_pixel: float | None, frame_interval_minutes: float | None) -> str:
     """Rewrite a pixel/frame unit in a label once a physical scale is known."""
     distance = "µm" if microns_per_pixel is not None else "px"
     time = "min" if frame_interval_minutes is not None else "frame"
+    # shape change is |ln(area ratio)| between consecutive frames
+    per_frame = f"(per {frame_interval_minutes:g} min)" if frame_interval_minutes is not None else "(per frame)"
     return (
-        label.replace("(px/frame)", f"({distance}/{time})")
+        label.replace("(per frame)", per_frame)
+        .replace("(px/frame)", f"({distance}/{time})")
         .replace("(px2)", "(µm²)" if microns_per_pixel is not None else "(px2)")
         .replace("(px)", f"({distance})")
     )

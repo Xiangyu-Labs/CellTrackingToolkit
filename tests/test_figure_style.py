@@ -101,6 +101,17 @@ def _number(value) -> str:
     return f"{0.0 if abs(value) < 1e-9 else value:.6g}"
 
 
+def _ylim(ax):
+    # Room for marker size and significance brackets depends on the drawn
+    # panel height, so data are compared on the range before that room.
+    return getattr(ax, "layout_free_ylim", ax.get_ylim())
+
+
+def _data_lines(ax):
+    # Brackets are spaced in points at layout time; they are not data.
+    return [line for line in ax.get_lines() if line.get_gid() != figures.STAT_BRACKET]
+
+
 def _fingerprint(fig) -> str:
     """Hash of what the figure shows: coordinates and axis ranges, not looks."""
     parts = []
@@ -109,8 +120,8 @@ def _fingerprint(fig) -> str:
             parts.append("hidden-axes")
             continue
         parts.append("xlim " + " ".join(map(_number, ax.get_xlim())))
-        parts.append("ylim " + " ".join(map(_number, ax.get_ylim())))
-        for line in ax.get_lines():
+        parts.append("ylim " + " ".join(map(_number, _ylim(ax))))
+        for line in _data_lines(ax):
             data = np.asarray(line.get_xydata(), dtype=float).ravel()
             parts.append("line " + " ".join(map(_number, data)))
         for collection in ax.collections:
@@ -188,7 +199,7 @@ class PhysicalUnitTests(unittest.TestCase):
 
         bundle = _only(microns, "temporal_long", "group_trajectories", "cell_appearance", "msd_long")
         texts = {text for image in figures.render_all_figures(bundle).values() for text in image.texts}
-        for expected in ("Instantaneous speed (µm/min)", "Cell area (µm²)", "Delta x (µm)", "Time (h)", "MSD (µm²)", "Time lag (min)"):
+        for expected in ("Instantaneous speed (µm/min)", "Cell area (µm²)", "Δx (µm)", "Time (h)", "MSD (µm²)", "Time lag (min)"):
             self.assertIn(expected, texts)
         self.assertFalse(any("px" in text or text == "Frame" for text in texts), sorted(t for t in texts if "px" in t))
 
@@ -237,7 +248,7 @@ class FigureDataTests(unittest.TestCase):
 
     def test_rendered_figures_list_their_default_wording(self):
         texts = self.rendered["figure_03_trajectory_classification.png"].texts
-        for expected in ("Trajectory classification", "Composition", "Alpha", "Directionality distribution"):
+        for expected in ("Trajectory classification", "Composition", "Alpha", "Directionality"):
             self.assertIn(expected, texts)
         self.assertFalse(any(text.isdigit() for text in texts))
 
@@ -272,10 +283,10 @@ class CompositeTests(unittest.TestCase):
             standalone = by_name["figure_03_trajectory_classification.png"].get_axes() + by_name["figure_05_msd_long.png"].get_axes()
             for mine, theirs in zip(composite_axes, standalone):
                 self.assertEqual(
-                    [line.get_xydata().tolist() for line in mine.get_lines()],
-                    [line.get_xydata().tolist() for line in theirs.get_lines()],
+                    [line.get_xydata().tolist() for line in _data_lines(mine)],
+                    [line.get_xydata().tolist() for line in _data_lines(theirs)],
                 )
-                self.assertEqual(mine.get_ylim(), theirs.get_ylim())
+                self.assertEqual(_ylim(mine), _ylim(theirs))
             self.assertEqual(len(composite_axes), len(standalone))
 
     def test_layout_never_shrinks_a_panel_below_its_standalone_size(self):
@@ -305,6 +316,229 @@ class CompositeTests(unittest.TestCase):
         before = (figures.COLORS, dict(figures.TYPE_COLORS), figures._STYLE)
         figures.render_all_figures(_only(self.bundle, "classification"), FigureStyle(**HEAVY_STYLE))
         self.assertEqual((figures.COLORS, dict(figures.TYPE_COLORS), figures._STYLE), before)
+
+
+class PrintSizeTests(unittest.TestCase):
+    """Print size changes the canvas and the text sizes, never the data."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._temporary = tempfile.TemporaryDirectory()
+        cls.bundle = _bundle(Path(cls._temporary.name), groups=2)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._temporary.cleanup()
+
+    def _one(self, style, draw):
+        with _Capture() as capture, figures.figure_style(style, tuple(self.bundle.groups)):
+            rendered = draw(self.bundle)
+            return rendered, capture.figures[-1], _fingerprint(capture.figures[-1])
+
+    def test_printed_width_and_dpi(self):
+        from PIL import Image
+        import io
+
+        style = FigureStyle(dpi=300, print_width_mm=180, formats=["tiff"])
+        rendered, fig, prints = self._one(style, figures.figure_classification)
+        _default, _fig, default_prints = self._one(FigureStyle(), figures.figure_classification)
+        self.assertEqual(prints, default_prints)
+        for data in (bytes(rendered), rendered.extras["tiff"]):
+            image = Image.open(io.BytesIO(data))
+            self.assertAlmostEqual(image.size[0], 180 / 25.4 * 300, delta=2)
+            self.assertAlmostEqual(image.info["dpi"][0], 300, delta=0.1)
+        sizes = {text.get_fontsize() for text in fig.findobj(figures.Text) if text.get_visible() and text.get_text()}
+        self.assertGreaterEqual(min(sizes), style.print_text_pt)
+        self.assertEqual(rendered.warnings, ())
+
+    def test_too_narrow_a_width_is_flagged(self):
+        rendered, _fig, _prints = self._one(FigureStyle(dpi=100, print_width_mm=85), figures.figure_classification)
+        self.assertTrue(rendered.warnings[0].startswith("Some text does not fit at 85 mm wide"), rendered.warnings)
+
+    def test_screen_figures_have_no_warnings(self):
+        rendered, _fig, _prints = self._one(FigureStyle(), figures.figure_classification)
+        self.assertEqual(rendered.warnings, ())
+
+    def test_tall_figures_are_squeezed_or_flagged(self):
+        composite = {"name": "Tall", "columns": [["cell_appearance", "classification", "msd_long", "group_trajectories"]]}
+        style = FigureStyle(dpi=100, print_width_mm=180, print_max_height_mm=120, composites=[composite])
+        with _Capture() as capture:
+            rendered = figures.render_all_figures(_only(self.bundle, "msd_summary"), style)
+            fig = capture.figures[-1]
+            height = fig.get_figheight() * 25.4
+        image = rendered["composite_01_tall.png"]
+        flagged = any("page limit" in note for note in image.warnings)
+        self.assertTrue(flagged or abs(height - 120) < 0.5, (height, image.warnings))
+
+    def test_two_group_representatives_stack_and_keep_outer_numbers(self):
+        style = FigureStyle(dpi=100, print_width_mm=180)
+        with figures.figure_style(style):
+            self.assertFalse(figures._representatives_grid(self.bundle)[0])
+        self.assertTrue(figures._representatives_grid(self.bundle)[0])
+        _rendered, fig, _prints = self._one(style, figures.figure_supplementary_representatives)
+        shown = [
+            ax for ax in fig.get_axes()
+            if ax.get_visible() and any(label.get_visible() and label.get_text() for label in ax.get_yticklabels())
+        ]
+        columns = {ax.get_subplotspec().colspan.start for ax in shown}
+        self.assertEqual(columns, {0})
+
+    def test_significance_marks_stay_inside_short_panels(self):
+        style = FigureStyle(dpi=100, print_width_mm=120)
+        _rendered, fig, _prints = self._one(style, figures.figure_parameter_distributions)
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        renderer = canvas.get_renderer()
+        marks = [(ax, text) for ax in fig.get_axes() for text in ax.texts if text.get_gid() == figures.STAT_MARK]
+        self.assertTrue(marks)
+        for ax, text in marks:
+            self.assertLessEqual(text.get_window_extent(renderer).y1, ax.bbox.y1 + 0.5, text.get_text())
+
+    def test_angle_plot_colour(self):
+        def bar_colours(style):
+            _rendered, fig, _prints = self._one(style, figures.figure_paper_group_trajectories)
+            return {
+                tuple(round(value, 3) for value in patch.get_facecolor()[:3])
+                for ax in fig.get_axes() if ax.name == "polar" for patch in ax.patches
+            }
+
+        grey = tuple(round(value, 3) for value in __import__("matplotlib.colors", fromlist=["to_rgb"]).to_rgb("#6B7280"))
+        self.assertEqual(bar_colours(FigureStyle(angle_plot_color="#6B7280")), {grey})
+        self.assertNotIn(grey, bar_colours(FigureStyle()))
+
+
+class ManuscriptQualityTests(unittest.TestCase):
+    """What a journal figure needs: nothing cut, nothing overlapping, no code text."""
+
+    PRINT = {
+        "dpi": 100, "print_width_mm": 165, "print_text_pt": 6, "hide_figure_titles": True,
+        "stat_captions": False, "formats": ["tiff"],
+        "composites": [
+            {"name": "Overview", "columns": [["cell_appearance", "classification", "msd_long", "group_trajectories"]]},
+            {"name": "Parameters", "columns": [["temporal_long", "parameter_distributions"]]},
+            {"name": "Representatives", "columns": [["representatives"]]},
+        ],
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        cls._temporary = tempfile.TemporaryDirectory()
+        cls.bundle = _bundle(Path(cls._temporary.name))
+        with _Capture() as capture:
+            cls.rendered = figures.render_all_figures(_only(cls.bundle, "msd_summary"), FigureStyle(**cls.PRINT))
+            cls.figures = dict(zip(cls.rendered, capture.figures))
+            cls.composites = {name: fig for name, fig in cls.figures.items() if name.startswith("composite_")}
+            # Keep the figures open for the tests; _Capture closes them on exit.
+            capture.figures = []
+
+    @classmethod
+    def tearDownClass(cls):
+        for fig in cls.figures.values():
+            figures.plt.close(fig)
+        cls._temporary.cleanup()
+
+    def test_every_dataset_point_is_inside_its_axes(self):
+        checked = 0
+        for name, fig in self.composites.items():
+            fig.canvas.draw()
+            for ax in fig.get_axes():
+                for points in [item for item in ax.collections if item.get_gid() == figures.STRIP_POINTS]:
+                    radius = np.sqrt(points.get_sizes().max()) / 2 * fig.dpi / 72
+                    shown = ax.transData.transform(np.asarray(points.get_offsets()))
+                    box = ax.bbox
+                    self.assertTrue(np.all(shown[:, 1] - radius >= box.y0 - 0.5), (name, ax.get_title()))
+                    self.assertTrue(np.all(shown[:, 1] + radius <= box.y1 + 0.5), (name, ax.get_title()))
+                    checked += 1
+        self.assertGreater(checked, 10)
+
+    def test_no_text_overlaps_and_marks_clear_their_brackets(self):
+        for name, fig in self.composites.items():
+            self.assertEqual(figures._text_overlaps(fig), (), name)
+            renderer = fig.canvas.get_renderer()
+            for ax in fig.get_axes():
+                items = getattr(ax, "_brackets", {"items": []})["items"]
+                for line, text, level in items:
+                    top = text.get_window_extent(renderer).y1
+                    self.assertLessEqual(top, ax.bbox.y1 + 0.5, (name, ax.get_title()))
+                    above = [other for other, _text, other_level in items if other_level == level + 1]
+                    for other in above:
+                        bracket = ax.transData.transform((0, max(other.get_ydata())))[1]
+                        self.assertLess(top, bracket, (name, ax.get_title()))
+        warned = {name: self.rendered[name].warnings for name in self.composites if self.rendered[name].warnings}
+        self.assertTrue(all("page limit" in note for notes in warned.values() for note in notes), warned)
+
+    def test_no_code_style_text(self):
+        texts = {text for name in self.composites for text in figures._figure_texts(self.figures[name])}
+        for fig in self.composites.values():
+            texts |= {text.get_text() for text in fig.findobj(figures.Text) if text.get_visible()}
+        for token in ("r_rb", "epsilon^2", "Delta ", "(deg)", " | ", "exponent alpha", "Cumulative appeared"):
+            self.assertFalse(any(token in text for text in texts), (token, sorted(t for t in texts if token in t)))
+
+    def test_trajectory_types_never_reuse_a_group_colour(self):
+        groups = {colour.casefold() for colour in figures.DEFAULT_GROUP_COLORS}
+        types = {colour.casefold() for colour in figures.DEFAULT_TYPE_COLORS.values()}
+        self.assertEqual(groups & types, set())
+
+    def test_print_exports_are_rgb_at_the_requested_dpi(self):
+        from PIL import Image
+        import io
+
+        for name in self.composites:
+            for data in (bytes(self.rendered[name]), self.rendered[name].extras["tiff"]):
+                image = Image.open(io.BytesIO(data))
+                self.assertEqual(image.mode, "RGB", name)
+                self.assertAlmostEqual(image.info["dpi"][0], 100, delta=0.1)
+
+
+class MsdTests(unittest.TestCase):
+    def test_gapped_track_uses_whole_frame_lags(self):
+        from types import SimpleNamespace
+
+        frames = [frame for frame in range(31) if frame not in (10, 11, 12)]
+        raw = SimpleNamespace(
+            x=[2.0 * frame for frame in frames], y=[0.0] * len(frames), timeframe=frames,
+            dataset="d", track_id=1,
+        )
+        series = analysis._compute_msd(SimpleNamespace(raw=raw, group="G"), AnalysisParameters())
+        self.assertEqual(series.lag_frames, tuple(float(lag) for lag in range(1, 16)))
+        # Straight-line motion at 2 px per frame: MSD = (2 k)^2 at every lag.
+        self.assertEqual(series.values, tuple(4.0 * lag * lag for lag in range(1, 16)))
+        self.assertAlmostEqual(series.alpha, 2.0, places=9)
+
+    def test_alpha_is_tested_and_exported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = _bundle(Path(directory))
+        rows = [row for row in analysis.statistical_results(bundle, ["msd_alpha"])]
+        self.assertEqual({row.metric for row in rows}, {"msd_alpha"})
+        self.assertIsNotNone(next(row for row in rows if row.test == "Kruskal-Wallis").p_value)
+        self.assertIn(b"msd_alpha", analysis.statistics_to_csv(bundle))
+
+
+class TemporalTests(unittest.TestCase):
+    def test_band_treats_samples_as_units(self):
+        from types import SimpleNamespace
+
+        def track(dataset, speed, frames=(0, 1, 2)):
+            return SimpleNamespace(raw=SimpleNamespace(dataset=dataset, timeframe=list(frames), speed=[speed] * len(frames)))
+
+        # Sample "a" has nine tracks at speed 1, sample "b" one track at 3.
+        # The line is the mean over tracks (1.2); the band is the
+        # sample-clustered SEM, sqrt(2 * (1.8² + 1.8²)) / 10 = 0.36, wider
+        # than the 0.2 that treating the ten tracks as independent gives.
+        tracks = [track("a", 1.0) for _ in range(9)] + [track("b", 3.0)]
+        frames, mean, sem = figures._temporal_values(tracks, "speed")
+        self.assertEqual(list(frames), [0.0, 1.0, 2.0])
+        np.testing.assert_allclose(mean, [1.2, 1.2, 1.2])
+        self.assertAlmostEqual(sem[0], 0.36)
+        # With one track per sample it is the ordinary SEM.
+        _frames, mean, sem = figures._temporal_values([track("a", 1.0), track("b", 2.0), track("c", 6.0)], "speed")
+        self.assertAlmostEqual(mean[0], 3.0)
+        self.assertAlmostEqual(sem[0], np.std([1.0, 2.0, 6.0], ddof=1) / np.sqrt(3))
+        # A frame reached by fewer than half of the samples is left out.
+        frames, _mean, _sem = figures._temporal_values(tracks + [track("c", 2.0, (0, 1, 2, 3)), track("d", 2.0)], "speed")
+        self.assertEqual(list(frames), [0.0, 1.0, 2.0])
 
 
 class StyleModelTests(unittest.TestCase):

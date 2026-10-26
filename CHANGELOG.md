@@ -5,6 +5,8 @@ workflow replaces that heading with the version number and release time.
 
 ## Unreleased
 
+## 2.0.18 — 2026-10-26 14:19 (UTC+8)
+
 - Added "Print size" to "Edit figures". Choose the printed width (85, 120 or
   180 mm, or another width) and the smallest text size, and every figure is
   laid out at that width with readable text and the chosen DPI. Figures that

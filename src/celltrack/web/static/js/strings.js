@@ -94,6 +94,7 @@ export const TEXT = Object.freeze({
   typeColors: "Trajectory type colours",
   angleOwnColor: "One colour for the final displacement angle plot",
   angleColor: "Final displacement angle plot colour",
+  angleCounts: "Polar plot shows the number of tracks (off: share of each group's tracks)",
   angleHint: "Off: each group's polar plot uses the group colour. On: every polar plot uses this colour, so green and orange only ever mean trajectory types in the trajectory analysis panels.",
   output: "Output",
   dpi: "Resolution (DPI)",

@@ -80,6 +80,10 @@ class FigureStyle(BaseModel):
     # group's colour. Next to trajectories coloured by type, a neutral colour
     # avoids green/orange meaning a group in one panel and a type in the next.
     angle_plot_color: str = ""
+    # The polar plot's radius: share of each group's tracks (default), or the
+    # number of tracks. Counts make groups with more tracks look bigger; that
+    # is the point when the number of moving cells is part of the result.
+    angle_counts: bool = False
     # Exact text replacements, matched on the whole label. An empty
     # replacement removes that text and the space it took.
     text: dict[str, str] = Field(default_factory=dict)

@@ -408,6 +408,22 @@ class PrintSizeTests(unittest.TestCase):
         self.assertEqual(bar_colours(FigureStyle(angle_plot_color="#6B7280")), {grey})
         self.assertNotIn(grey, bar_colours(FigureStyle()))
 
+    def test_angle_plot_counts(self):
+        def bar_heights(style):
+            _rendered, fig, _prints = self._one(style, figures.figure_paper_group_trajectories)
+            return [
+                [patch.get_height() for patch in ax.patches]
+                for ax in fig.get_axes() if ax.name == "polar"
+            ]
+
+        shares = bar_heights(FigureStyle())
+        counts = bar_heights(FigureStyle(angle_counts=True))
+        self.assertEqual(len(shares), len(counts))
+        for share, count in zip(shares, counts):
+            self.assertAlmostEqual(sum(share), 100.0)
+            self.assertTrue(all(float(value).is_integer() for value in count))
+            self.assertAlmostEqual(sum(share), sum(count) / sum(count) * 100.0)
+
 
 class ManuscriptQualityTests(unittest.TestCase):
     """What a journal figure needs: nothing cut, nothing overlapping, no code text."""

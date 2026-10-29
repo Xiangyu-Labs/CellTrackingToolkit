@@ -622,7 +622,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(figures._bundle_trajectory_limit(bundle), 324.0)
         _edges, radial_limit = figures._angle_histogram_scale(bundle)
         self.assertAlmostEqual(radial_limit, 105.0)
-        percentages = figures._angle_histogram_percentages(bundle, "A", _edges)
+        percentages = figures._angle_histogram_heights(bundle, "A", _edges)
         self.assertAlmostEqual(float(percentages.sum()), 100.0)
         self.assertAlmostEqual(float(percentages.max()), 100.0)
 

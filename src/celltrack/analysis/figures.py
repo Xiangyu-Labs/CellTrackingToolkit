@@ -943,13 +943,14 @@ def _angle_histogram_scale(bundle) -> tuple[np.ndarray, float]:
     edges = np.linspace(-math.pi, math.pi, bundle.parameters.angle_bins + 1)
     maximum = 1.0
     for group in bundle.groups:
-        percentages = _angle_histogram_percentages(bundle, group, edges)
-        if len(percentages):
-            maximum = max(maximum, float(np.max(percentages)))
+        heights = _angle_histogram_heights(bundle, group, edges)
+        if len(heights):
+            maximum = max(maximum, float(np.max(heights)))
     return edges, maximum * 1.05
 
 
-def _angle_histogram_percentages(bundle, group: str, edges: np.ndarray) -> np.ndarray:
+def _angle_histogram_heights(bundle, group: str, edges: np.ndarray) -> np.ndarray:
+    """Tracks per angle bin, as a share of the group's tracks or as a count."""
     angles = [
         item.final_angle
         for item in bundle.summaries_for(group, True)
@@ -958,6 +959,8 @@ def _angle_histogram_percentages(bundle, group: str, edges: np.ndarray) -> np.nd
     if not angles:
         return np.zeros(len(edges) - 1, dtype=float)
     counts, _ = np.histogram(angles, bins=edges)
+    if _STYLE.angle_counts:
+        return counts.astype(float)
     return counts.astype(float) / len(angles) * 100.0
 
 
@@ -1029,7 +1032,7 @@ def _plot_group_trajectory_axes(bundle, group_index: int, axes, limit: float, ti
     axes[0].set_xlabel(f"Δx ({unit})")
     axes[0].set_ylabel(f"Δy ({unit})")
     angle_edges, radial_limit = _angle_histogram_scale(bundle)
-    percentages = _angle_histogram_percentages(bundle, group, angle_edges)
+    percentages = _angle_histogram_heights(bundle, group, angle_edges)
     centers = (angle_edges[:-1] + angle_edges[1:]) / 2
     axes[1].bar(
         centers,
@@ -1039,8 +1042,9 @@ def _plot_group_trajectory_axes(bundle, group_index: int, axes, limit: float, ti
         alpha=0.78,
     )
     axes[1].set_ylim(0, radial_limit)
-    axes[1].yaxis.set_major_locator(MaxNLocator(nbins=3, min_n_ticks=2))
-    axes[1].yaxis.set_major_formatter(lambda value, _position: f"{value:g}%")
+    axes[1].yaxis.set_major_locator(MaxNLocator(nbins=3, min_n_ticks=2, integer=_STYLE.angle_counts))
+    suffix = "" if _STYLE.angle_counts else "%"
+    axes[1].yaxis.set_major_formatter(lambda value, _position: f"{value:g}{suffix}")
     # The radial numbers go along the quietest sector (a bar and its two
     # neighbours, since the text is wider than one bar), with a white halo
     # where they still cross a bar.

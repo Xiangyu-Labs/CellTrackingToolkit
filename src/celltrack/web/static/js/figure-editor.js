@@ -82,6 +82,7 @@ function angleRows() {
     <div class="editor-checks">
       <label class="editor-inline"><input type="checkbox" data-field="angle-own" ${color ? "checked" : ""}><span>${formatText("angleOwnColor")}</span></label>
       <input type="color" data-field="angle-color" value="${escapeHtml(color || options.neutral_angle_color)}" ${color ? "" : "disabled"} aria-label="${formatText("angleColor")}">
+      <label class="editor-inline"><input type="checkbox" data-field="angle_counts" ${edit.style.angle_counts ? "checked" : ""}><span>${formatText("angleCounts")}</span></label>
     </div>
     <p class="editor-hint">${formatText("angleHint")}</p>`;
 }
@@ -302,7 +303,7 @@ function onChange(event) {
     else if (edit.printCustom) edit.style.print_width_mm = edit.style.print_width_mm ?? 150;
     else edit.style.print_width_mm = Number(target.value);
     render();
-  } else if (field === "hide_figure_titles" || field === "short_dataset_names" || field === "stat_captions") {
+  } else if (field === "hide_figure_titles" || field === "short_dataset_names" || field === "stat_captions" || field === "angle_counts") {
     edit.style[field] = target.checked;
   } else if (field === "text-hide") {
     const row = target.closest("[data-text]");

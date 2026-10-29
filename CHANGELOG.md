@@ -5,6 +5,11 @@ workflow replaces that heading with the version number and release time.
 
 ## Unreleased
 
+- The final displacement angle plots can show the number of tracks instead
+  of the share of each group's tracks ("Edit figures" > final displacement
+  angle). All groups share one scale, so a group with more tracks has a
+  bigger plot, as in the first figures.
+
 ## 2.0.18 — 2026-10-26 14:19 (UTC+8)
 
 - Added "Print size" to "Edit figures". Choose the printed width (85, 120 or
